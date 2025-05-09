@@ -4,6 +4,7 @@
 # @Describe:
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 
 def optim_wrapper(func, *args, **kwargs):
@@ -48,62 +49,80 @@ def plot_global_metrics(history: dict):
 
     # 调整布局，显示所有子图
     plt.tight_layout()
+    
+    # 创建保存目录
+    os.makedirs("plots", exist_ok=True)
+    plt.savefig("plots/fl_global_metrics.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 
 def plot_worker_metrics(history: dict):
     """
-    为每个worker创建一个独立的画板，绘制其训练损失、测试准确率和测试损失
+    将所有worker的训练损失、测试准确率和测试损失绘制在同一个图表上
     """
     workers_history = history["workers"]
     epochs = range(1, len(next(iter(workers_history.values()))["train_loss"]) + 1)
 
-    # 遍历每个worker，为每个worker创建一个独立的画板
-    for client_name, metrics in workers_history.items():
-        # 创建一个新的图表（画板）
-        plt.figure(figsize=(12, 5))
+    # 创建保存目录
+    os.makedirs("plots", exist_ok=True)
 
-        # 绘制训练损失
-        plt.subplot(1, 3, 1)
+    # 创建一个大的图表，包含三个子图
+    plt.figure(figsize=(15, 15))
+
+    # 绘制训练损失比较
+    plt.subplot(3, 1, 1)
+    for client_name, metrics in workers_history.items():
         plt.plot(
             epochs,
             metrics["train_loss"],
-            label=f"{client_name} Train Loss",
-            color="blue",
+            label=f"{client_name}",
+            marker='o',
+            markersize=3
         )
-        plt.xlabel("Epochs")
-        plt.ylabel("Loss")
-        plt.title(f"{client_name} - Train Loss")
-        plt.grid(True)
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title("Training Loss Comparison")
+    plt.legend()
+    plt.grid(True)
 
-        # 绘制测试准确率
-        plt.subplot(1, 3, 2)
+    # 绘制测试准确率比较
+    plt.subplot(3, 1, 2)
+    for client_name, metrics in workers_history.items():
         plt.plot(
             epochs,
             metrics["accuracy"],
-            label=f"{client_name} Test Accuracy",
-            color="green",
+            label=f"{client_name}",
+            marker='^',
+            markersize=3
         )
-        plt.xlabel("Epochs")
-        plt.ylabel("Accuracy (%)")
-        plt.title(f"{client_name} - Test Accuracy")
-        plt.grid(True)
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy (%)")
+    plt.title("Test Accuracy Comparison")
+    plt.legend()
+    plt.grid(True)
 
-        # 绘制测试损失
-        plt.subplot(1, 3, 3)
+    # 绘制测试损失比较
+    plt.subplot(3, 1, 3)
+    for client_name, metrics in workers_history.items():
         plt.plot(
-            epochs, metrics["test_loss"], label=f"{client_name} Test Loss", color="red"
+            epochs,
+            metrics["test_loss"],
+            label=f"{client_name}",
+            marker='s',
+            markersize=3
         )
-        plt.xlabel("Epochs")
-        plt.ylabel("Loss")
-        plt.title(f"{client_name} - Test Loss")
-        plt.grid(True)
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title("Test Loss Comparison")
+    plt.legend()
+    plt.grid(True)
 
-        # 调整布局，确保图表不重叠
-        plt.tight_layout()
-
-        # 显示该worker的图表
-        plt.show()
+    # 调整布局
+    plt.tight_layout()
+    
+    # 保存图表
+    plt.savefig("plots/fl_clients_comparison.png", dpi=300, bbox_inches='tight')
+    plt.show()
 
 
 def plot_client_label_distribution(datasets_dict):
@@ -111,6 +130,9 @@ def plot_client_label_distribution(datasets_dict):
     绘制每个客户端的标签分布。
     :param datasets_dict: 每个客户端的数据字典，包含 'train_dataset' 和 'test_dataset'
     """
+    # 创建保存目录
+    os.makedirs("plots", exist_ok=True)
+    
     # 遍历客户端的数据字典
     for client, data in datasets_dict.items():
         # 提取训练集标签
@@ -133,4 +155,7 @@ def plot_client_label_distribution(datasets_dict):
         plt.xticks(rotation=45)
         plt.grid(axis="y", linestyle="--", alpha=0.7)
         plt.tight_layout()
+        
+        # 保存图表
+        plt.savefig(f"plots/{client}_label_distribution.png", dpi=300, bbox_inches='tight')
         plt.show()

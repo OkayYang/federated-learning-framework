@@ -1,6 +1,6 @@
+torch
+torchvision
 numpy~=1.26.4
 requests~=2.32.3
-torch~=1.13.0+cu117
-torchvision~=0.14.0+cu117
 tqdm~=4.67.0
 matplotlib~=3.9.2

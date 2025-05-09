@@ -54,7 +54,10 @@ class FLServer:
         # 迭代训练过程
         global_weight = self.initialize_client_weights()
         for round_num in range(comm_rounds):
-            print(f"Starting round {round_num + 1}...")
+            print("\n" + "="*50)
+            print(f"Round {round_num + 1}/{comm_rounds}")
+            print("="*50)
+            
             # 选择部分客户端进行训练
             selected_workers = {
                 client_name: self._workers[client_name]
@@ -81,8 +84,9 @@ class FLServer:
                 self.history["workers"][client_name]["train_loss"].append(train_loss)
 
             # 评估
+            print("\nEvaluating clients...")
             for client_name, worker in tqdm(
-                selected_workers.items(), desc="Evaluate Clients", unit="worker"
+                selected_workers.items(), desc="Progress", unit="client"
             ):
                 # 客户端评估并记录数据
                 test_acc, test_loss = worker.local_evaluate()
@@ -104,10 +108,10 @@ class FLServer:
             self.history["global"]["test_loss"].append(avg_test_loss)
 
             # 输出当前轮次的结果
-            print(f"Train Loss: {avg_train_loss}")
-            print(f"Test Accuracy: {avg_accuracy}")
-            print(f"Test Loss: {avg_test_loss}")
-            print(f"Round {round_num + 1} completed.")
+            print("\nRound Summary:")
+            print(f"├─ Train Loss: {avg_train_loss:.4f}")
+            print(f"├─ Test Accuracy: {avg_accuracy:.2%}")
+            print(f"└─ Test Loss: {avg_test_loss:.4f}")
 
             # 聚合客户端的模型更新
             global_weight = average_weight(client_weight_list, sample_num_list)

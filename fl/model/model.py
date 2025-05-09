@@ -27,9 +27,9 @@ class FeMNISTNet(nn.Module):
 
 
 # 定义简单的 CNN 模型
-class MNISTNetCNN(nn.Module):
+class MNISTNet(nn.Module):
     def __init__(self):
-        super(MNISTNetCNN, self).__init__()
+        super(MNISTNet, self).__init__()
         # 第一层卷积，输入通道为1（MNIST图像是单通道），输出通道为32，卷积核大小为3
         self.conv1 = nn.Conv2d(1, 32, 3)
         self.pool = nn.MaxPool2d(2, 2)

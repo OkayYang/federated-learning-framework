@@ -26,51 +26,35 @@ def download_data(url, save_path):
 
 
 def load_feminist_dataset():
-    # Local paths to store the datasets
+    """
+    加载FEMNIST数据集，如果本地不存在则从远程下载
+
+    Returns:
+        tuple: (client_list, datasets_dict) - 客户端列表和包含训练测试数据的字典
+    """
+    import os
+    import json
+
+    # 本地存储数据集的路径
     train_json_dir = "data/Femnist/train_data_niid.json"
     test_json_dir = "data/Femnist/test_data_niid.json"
 
-    # URLs of the remote server where the datasets are stored
+    # 远程服务器上数据集的URL
     train_data_url = "https://cos.ywenrou.cn/dataset/FEMNIST/train_data_niid.json"
-    test_data_url = "https://yourserver.com/dataset/FEMNIST/test_data_niid.json"
+    test_data_url = "https://cos.ywenrou.cn/dataset/FEMNIST/test_data_niid.json"
 
-    # Check if the train dataset exists locally, if not, download it
+    # 确保数据目录存在
+    os.makedirs(os.path.dirname(train_json_dir), exist_ok=True)
+
+    # 检查训练数据集是否在本地存在，如果不存在，则下载
     if not os.path.exists(train_json_dir):
         download_data(train_data_url, train_json_dir)
 
-    # Check if the test dataset exists locally, if not, download it
+    # 检查测试数据集是否在本地存在，如果不存在，则下载
     if not os.path.exists(test_json_dir):
         download_data(test_data_url, test_json_dir)
 
-    # Load data from local JSON files
-    with open(train_json_dir, "r") as f:
-        train_data = json.load(f)
-    with open(test_json_dir, "r") as f:
-        test_data = json.load(f)
-
-    datasets_dict = {}
-
-    for user in train_data["users"]:
-        user_train_data = train_data["user_data"][user]
-        user_test_data = test_data["user_data"][user]
-
-        # Create training and testing datasets
-        train_dataset = FemnistDataset(user_train_data["x"], user_train_data["y"])
-        test_dataset = FemnistDataset(user_test_data["x"], user_test_data["y"])
-
-        # Return the client name and corresponding training and testing datasets
-        datasets_dict[user] = {
-            "train_dataset": train_dataset,
-            "test_dataset": test_dataset,
-        }
-
-    return datasets_dict
-
-
-def load_feminist_dataset():
-    train_json_dir = "data/Femnist/train_data_niid.json"
-    test_json_dir = "data/Femnist/test_data_niid.json"
-
+    # 从本地JSON文件加载数据
     with open(train_json_dir, "r") as f:
         train_data = json.load(f)
     with open(test_json_dir, "r") as f:
@@ -87,12 +71,11 @@ def load_feminist_dataset():
         train_dataset = FemnistDataset(user_train_data["x"], user_train_data["y"])
         test_dataset = FemnistDataset(user_test_data["x"], user_test_data["y"])
 
-        # 返回客户端名称以及对应的训练集和测试集
+        # 将数据添加到字典中
         datasets_dict[user] = {
             "train_dataset": train_dataset,
             "test_dataset": test_dataset,
         }
-
         client_list.append(user)  # 添加用户到客户端列表
 
     return client_list, datasets_dict  # 返回客户端列表和数据集字典
