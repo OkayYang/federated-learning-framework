@@ -58,7 +58,7 @@ Thumbs.db
 *.log
 *.sqlite
 *.db
-
+*.pth
 # Test and coverage reports
 *.coveragerc
 .coverage
