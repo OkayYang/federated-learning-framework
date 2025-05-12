@@ -27,21 +27,26 @@ class FedAvg(BaseClient):
         total_batches = len(self.train_loader) * self.epochs
         with tqdm(
             total=total_batches,
-            desc=f"Client {self.client_id} Training Progress",
-            ncols=100,
+            desc=f"Client {self.client_id} Training Progress"
         ) as pbar:
             for epoch in range(self.epochs):  # 多轮本地训练
-                total_loss = 0
+                epoch_loss = 0
                 for data, target in self.train_loader:  # 获取每个 batch
                     self.optimizer.zero_grad()  # 清除之前的梯度
                     output = self.model(data)  # 前向传播
                     loss = self.loss(output, target)  # 计算损失
-                    total_loss += loss.item()  # 累加损失
+                    epoch_loss += loss.item()  # 累加损失
                     loss.backward()  # 反向传播
                     self.optimizer.step()  # 更新模型参数
 
                     # 更新进度条
-                    pbar.update(1)  # 每训练一个 batch 更新一次进度条
+                    pbar.update(1)
+                total_loss += epoch_loss
+                avg_loss = epoch_loss / len(self.train_loader)
+                pbar.set_postfix({
+                    'epoch': f"{epoch+1}/{self.epochs}",
+                    'loss': f"{avg_loss:.4f}"
+                })
         # 4. 获取训练后的权重
         model_weights = self.get_weights(return_numpy=True)
 
