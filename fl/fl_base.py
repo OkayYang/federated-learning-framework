@@ -22,6 +22,7 @@ class BaseClient(ABC):
         batch_size,
         train_loader,
         test_loader,
+        **kwargs,
     ):
         self.client_id = client_id
         self.model = model
@@ -31,7 +32,7 @@ class BaseClient(ABC):
         self.batch_size = batch_size
         self.train_loader = train_loader
         self.test_loader = test_loader
-
+        self.kwargs = kwargs
     @abstractmethod
     def local_train(self, sync_round: int, weights=None):
         """
@@ -83,6 +84,7 @@ class ModelConfig:
         optim_fn: Callable[..., optim.Optimizer],  # 用于生成优化器的函数
         epochs: int,
         batch_size: int,
+        **kwargs,
     ):
         """
         初始化模型配置
@@ -97,7 +99,7 @@ class ModelConfig:
         self.optim_fn = optim_fn
         self.epochs = epochs
         self.batch_size = batch_size
-
+        self.kwargs = kwargs
     def get_optimizer(self, parameters):
         """获取优化器"""
         return self.optim_fn(parameters)

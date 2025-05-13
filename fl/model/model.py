@@ -41,14 +41,16 @@ class MNISTNet(nn.Module):
         self.fc1 = nn.Linear(64 * 5 * 5, 128)
         self.fc2 = nn.Linear(128, 10)  # 输出10个类别
 
-    def forward(self, x):
+    def forward(self, x, return_all=False):
         # 第一层卷积 + ReLU + 池化
         x = self.pool(F.relu(self.conv1(x)))
         # 第二层卷积 + ReLU + 池化
         x = self.pool(F.relu(self.conv2(x)))
         # 将二维数据展平为一维
-        x = x.view(-1, 64 * 5 * 5)
+        h = x.view(-1, 64 * 5 * 5)
         # 全连接层
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
+        x = self.fc1(h)
+        y = self.fc2(F.relu(x))
+        if return_all:
+            return h, x, y
+        return y

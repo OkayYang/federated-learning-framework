@@ -96,7 +96,7 @@ def train_client_model(client_name, train_dataset, test_dataset, epochs=10, batc
         print(f"└─ Test Accuracy: {accuracy:.2%}")
     
     # 保存模型
-    torch.save(model.state_dict(), f"{client_name}_model.pth")
+    #torch.save(model.state_dict(), f"{client_name}_model.pth")
     
     return history, model
 

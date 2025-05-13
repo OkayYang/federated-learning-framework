@@ -12,7 +12,7 @@ class FedProx(BaseClient):
     """FedProx算法实现"""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.mu = 0.01
+        self.mu = kwargs['mu']   
 
     def proximal_term(self, w1:list, w2:list):
         """

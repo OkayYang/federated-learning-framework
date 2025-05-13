@@ -13,8 +13,8 @@ class Moon(BaseClient):
     """Moon算法实现"""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.mu = 5
-        self.temperature = 0.5
+        self.mu = kwargs['mu']
+        self.temperature = kwargs['temperature']  # 从kwargs中获取temperature参数
         self.cosine_similarity_fn = torch.nn.CosineSimilarity(dim=-1)
         # 设置MOON特定参数
         self.buffer_size = 1

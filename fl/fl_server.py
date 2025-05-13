@@ -25,7 +25,7 @@ class FLServer:
         self.strategy = strategy  # 联邦学习策略（例如 FedAvg, FedProx）
         self.model_config = model_config  # 服务器的全局模型
         self._workers = {
-            client: create_client(strategy, client, model_config, client_dataset_dict)
+            client: create_client(strategy, client, model_config, client_dataset_dict, **kwargs)
             for client in client_list
         }
         # 初始化历史记录结构，包含每个worker的详细记录
