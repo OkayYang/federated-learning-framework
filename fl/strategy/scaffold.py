@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # @Author  : xuxiaoyang
-# @Time    : 2025/5/12 11:07
+# @Time    : 2024/11/7 11:07
 # @Describe:
 import torch
 from tqdm import tqdm
@@ -8,25 +8,10 @@ from tqdm import tqdm
 from fl.fl_base import BaseClient
 
 
-class FedProx(BaseClient):
-    """FedProx算法实现"""
+class Scaffold(BaseClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.mu = kwargs['mu']   
-
-    def proximal_term(self, w1:list, w2:list):
-        """
-        计算近端项（proximal term），用于FedProx算法
-        :param w1: 全局模型权重列表
-        :param w2: 本地模型权重列表
-        :return: 近端项损失
-        """
-        l1 = len(w1)
-        assert l1 == len(w2), "weights should be same in the shape"
-        proximal_term = 0
-        for i in range(l1):
-            proximal_term += (torch.tensor(w1[i]) - w2[i]).norm(2) ** 2
-        return proximal_term
+        
 
     def local_train(self, sync_round: int, weights=None):
         """
@@ -45,7 +30,7 @@ class FedProx(BaseClient):
         total_batches = len(self.train_loader) * self.epochs
         with tqdm(
             total=total_batches,
-            desc=f"Round {sync_round} Client {self.client_id} Training Progress (FedProx)"
+            desc=f"Client {self.client_id} Training Progress"
         ) as pbar:
             for epoch in range(self.epochs):  # 多轮本地训练
                 epoch_loss = 0
@@ -53,9 +38,6 @@ class FedProx(BaseClient):
                     self.optimizer.zero_grad()  # 清除之前的梯度
                     output = self.model(data)  # 前向传播
                     loss = self.loss(output, target)  # 计算损失
-                    if weights is not None:
-                        proximal_term = self.proximal_term(weights,list(self.model.parameters()))
-                        loss += self.mu/2 * proximal_term
                     epoch_loss += loss.item()  # 累加损失
                     loss.backward()  # 反向传播
                     self.optimizer.step()  # 更新模型参数
