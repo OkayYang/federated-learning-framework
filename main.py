@@ -64,11 +64,31 @@ def setup_and_train_federated_model(args):
         model_fn = FeMNISTNet
     elif args.dataset.lower() == 'mnist':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
-        dataset_dict = datasets.load_mnist_dataset(client_list, partition=args.partition, seed=args.seed)
+        dataset_dict = datasets.load_mnist_dataset(client_list, partition=args.partition, beta=args.beta, seed=args.seed)
         model_fn = MNISTNet
     else:
         raise ValueError(f"不支持的数据集: {args.dataset}")
+    
+     # 打印数据分布信息
+    print(f"\n数据集划分方式: {args.partition}")
+    if args.partition == "dirichlet":
+        print(f"狄利克雷分布参数 beta: {args.beta} (较小的值表示更高的异质性)")
+    
+    print("\n客户端数据统计:")
+    for client in client_list:
+        train_labels = [dataset_dict[client]["train_dataset"].Y[i].item() for i in range(len(dataset_dict[client]["train_dataset"]))]
+        test_labels = [dataset_dict[client]["test_dataset"].Y[i].item() for i in range(len(dataset_dict[client]["test_dataset"]))]
+        print(f"客户端 {client}: 训练样本总数: {len(train_labels)}, 测试样本总数: {len(test_labels)}")
+        #训练样本标签分布
+        unique, counts = np.unique(train_labels, return_counts=True)
+        print(f"  训练样本标签分布: {dict(zip(unique, counts))}")
+        #测试样本标签分布
+        unique, counts = np.unique(test_labels, return_counts=True)
+        print(f"  测试样本标签分布: {dict(zip(unique, counts))}")
 
+    # 绘制客户端标签分布
+    if args.plot_distribution:
+        plot_client_label_distribution(dataset_dict)
     # 定义损失函数（分类任务使用交叉熵损失）
     loss_fn = nn.CrossEntropyLoss
 
@@ -147,10 +167,12 @@ def parse_arguments():
     # 数据集相关参数
     parser.add_argument('--dataset', type=str, default='femnist', choices=['femnist', 'mnist'],
                         help='要使用的数据集 (femnist 或 mnist)')
-    parser.add_argument('--partition', type=str, default='noidd', choices=['idd', 'noidd'],
-                        help='数据分区方式 (idd 或 noidd)')
+    parser.add_argument('--partition', type=str, default='noidd', choices=['iid', 'noidd', 'dirichlet'],
+                        help='数据分区方式 (iid 或 noidd 或 dirichlet)')
     parser.add_argument('--num_clients', type=int, default=10,
                         help='当使用MNIST数据集时的客户端数量')
+    parser.add_argument('--beta', type=float, default=0.4,
+                        help='当使用dirichlet划分方式时的狄利克雷分布的参数')
     
     # 训练相关参数
     parser.add_argument('--batch_size', type=int, default=64, 
@@ -178,6 +200,8 @@ def parse_arguments():
     # 其他参数
     parser.add_argument('--seed', type=int, default=42,
                         help='随机种子')
+    parser.add_argument('--plot_distribution', type=bool, default=False,
+                        help='是否绘制客户端标签分布')
     
     return parser.parse_args()
 
