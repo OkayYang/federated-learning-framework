@@ -2,6 +2,7 @@
 # @Author  : xuxiaoyang
 # @Time    : 2024/11/7 11:07
 # @Describe:
+import copy
 import torch
 from tqdm import tqdm
 
@@ -11,9 +12,18 @@ from fl.fl_base import BaseClient
 class Scaffold(BaseClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Define Scaffold hyperparameters here
+        self.cg = []
+        self.c = []
+        for param in self.model.parameters():
+            self.c.append(torch.zeros_like(param))
+            self.cg.append(torch.zeros_like(param))
+        # 从kwargs中获取学习率，如果没有提供则使用默认值
+        self.eta_l = kwargs.get('lr', 0.01)
+        self.global_model = copy.deepcopy(self.model)  # 全局模型副本
         
 
-    def local_train(self, sync_round: int, weights=None):
+    def local_train(self, sync_round: int, weights=None, cg=None):
         """
         训练方法，根据当前通信轮次(sync_round)进行相应的训练更新
         :param weights: 服务器传递过来的模型权重
@@ -22,6 +32,20 @@ class Scaffold(BaseClient):
         # 1. 加载服务器传来的全局模型权重
         if weights is not None:
             self.update_weights(weights)
+            self.global_model.load_state_dict(self.model.state_dict())
+            # 设置全局模型为评估模式
+            self.global_model.eval()
+            for param in self.global_model.parameters():
+                param.requires_grad = False
+        if cg is not None:
+            for i, c in enumerate(cg):
+                if isinstance(c, torch.Tensor):
+                    self.cg[i] = c.detach().clone()
+                else:
+                    self.cg[i] = torch.tensor(c)
+        
+        # 保存初始模型参数，用于后续计算控制变量
+        
 
         # 3. 开始本地训练
         self.model.train()
@@ -30,7 +54,7 @@ class Scaffold(BaseClient):
         total_batches = len(self.train_loader) * self.epochs
         with tqdm(
             total=total_batches,
-            desc=f"Client {self.client_id} Training Progress"
+            desc=f"Round {sync_round} Client {self.client_id} Training Progress (Scaffold)"
         ) as pbar:
             for epoch in range(self.epochs):  # 多轮本地训练
                 epoch_loss = 0
@@ -39,9 +63,17 @@ class Scaffold(BaseClient):
                     output = self.model(data)  # 前向传播
                     loss = self.loss(output, target)  # 计算损失
                     epoch_loss += loss.item()  # 累加损失
-                    loss.backward()  # 反向传播
-                    self.optimizer.step()  # 更新模型参数
-
+                    loss.backward()  # 反向传播，计算梯度
+                    
+                    # 手动更新参数，按照公式 y_i ← y_i - η_l(g_i(y_i) - c_i + c)
+                    with torch.no_grad():  # 在无梯度跟踪的上下文中更新参数
+                        for i, param in enumerate(self.model.parameters()):
+                            if param.grad is not None:
+                                # 计算修正后的梯度：g_i(y_i) - c_i + c
+                                corrected_grad = param.grad - self.c[i] + self.cg[i]
+                                # 应用梯度更新：y_i ← y_i - η_l * corrected_grad
+                                param.data.add_(-self.eta_l * corrected_grad)
+                    
                     # 更新进度条
                     pbar.update(1)
                 total_loss += epoch_loss
@@ -50,10 +82,29 @@ class Scaffold(BaseClient):
                     'epoch': f"{epoch+1}/{self.epochs}",
                     'loss': f"{avg_loss:.4f}"
                 })
+
+        # Update c after local training is completed
+        # 使用Option II更新控制变量: c_i ← c_i − c + 1/(Kηl) * (x − y_i)
+        # 其中x是全局模型参数，y_i是本地模型参数
+        global_params = list(self.global_model.parameters())
+        local_params = list(self.model.parameters())
+        
+        # 更新本地控制变量
+        for i, (global_param, local_param) in enumerate(zip(global_params, local_params)):
+            # 计算参数差: (x - y_i)
+            param_diff = global_param.data - local_param.data
+            
+            # 按论文公式: c_i ← c_i − c + 1/(Kηl) * (x − y_i)
+            # K是本地迭代次数，ηl是学习率
+            update_term = param_diff / (self.eta_l * total_batches)
+            self.c[i] = self.c[i] - self.cg[i] + update_term
+        
+        # 计算当前本地控制变量的副本（用于返回给服务器）
+        c_current = [c.clone().detach() for c in self.c]
+
         # 4. 获取训练后的权重
         model_weights = self.get_weights(return_numpy=True)
 
-        # 5. 返回更新后的权重给服务器，同时返回样本数和平均损失
+        # 5. 返回更新后的权重给服务器，同时返回样本数、平均损失和当前控制变量
         avg_loss = total_loss / (len(self.train_loader) * self.epochs)
-        # print(f'客户端:{self.client_id} 第{sync_round}轮通信:Training Loss: {avg_loss}')
-        return model_weights, num_sample, avg_loss
+        return model_weights, num_sample, avg_loss, c_current

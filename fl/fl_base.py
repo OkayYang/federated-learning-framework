@@ -75,6 +75,15 @@ class BaseClient(ABC):
             weights_dict[k] = torch.Tensor(np.copy(v))
         self.model.load_state_dict(weights_dict)
 
+    def get_gradients(self, parameters=None):
+        if parameters is None:
+            parameters = self.model.parameters()
+        grads = []
+        for p in parameters:
+            grad = None if p.grad is None else p.grad.data.cpu().numpy()
+            grads.append(grad)
+        return [g.copy() for g in grads]
+
 
 class ModelConfig:
     def __init__(

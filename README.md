@@ -5,7 +5,7 @@
 ## 特性
 
 - **自定义数据集**：支持 `FEMNIST` 和 `MNIST` 数据集，适用于联邦学习实验。
-- **联邦学习算法**：实现了 `FedAvg`、`FedProx`、`MOON` 算法，未来将扩展支持 `FedBN`、`SCAFFOLD` 等经典算法、个性化联邦学习算法等。
+- **联邦学习算法**：实现了 `FedAvg`、`FedProx`、`MOON`、`SCAFFOLD` 算法，未来将扩展支持 `FedBN` 等经典算法、个性化联邦学习算法等。
 - **隐私保护功能**：计划加入同态加密和差分隐私等技术，以保证联邦学习过程中的数据隐私。
 
 ## 已实现功能
@@ -18,10 +18,10 @@
 - [x] **FedAvg**：实现了经典的联邦平均算法（Federated Averaging，FedAvg），这是联邦学习中的基础算法。
 - [x] **FedProx**：实现了FedProx算法，通过添加近端正则化项，优化联邦学习中的非独立同分布（Non-IID）问题。
 - [x] **MOON**：实现了MOON (Model-Contrastive Federated Learning)算法，利用对比学习提高联邦学习在Non-IID数据上的性能。
+- [x] **SCAFFOLD**：实现了SCAFFOLD (Stochastic Controlled Averaging for Federated Learning)算法，通过控制变量减少客户端偏差，加速联邦学习收敛。
 
 ### 未来计划
 - [ ] **FedBN**：实现 FedBN 算法，用于解决分布式训练中的批量归一化问题。
-- [ ] **SCAFFOLD**：支持 SCAFFOLD 算法，改善联邦学习中的客户端偏差。
 - [ ] **同态加密联邦学习**：加入同态加密保护数据隐私，使得在训练过程中不会暴露用户数据。
 - [ ] **差分隐私联邦学习**：实现差分隐私机制，保护用户数据隐私。
 
@@ -58,13 +58,16 @@ python main.py --dataset mnist --strategy fedprox --mu 0.01
 
 # 使用MOON算法，自定义训练参数
 python main.py --strategy moon --mu 1.0 --temperature 0.5 --lr 0.001 --batch_size 32 --local_epochs 5 --comm_rounds 50
+
+# 使用SCAFFOLD算法
+python main.py --strategy scaffold --lr 0.05 --batch_size 64 --local_epochs 10 --comm_rounds 50
 ```
 
 #### 可用参数：
 
 - **数据集参数**：
   - `--dataset`: 指定数据集 (femnist 或 mnist)
-  - `--partition`: 数据分区方式 (idd 或 noidd)，仅用于MNIST
+  - `--partition`: 数据分区方式 (iid 或 noiid 或 dirichlet)，仅用于MNIST
   - `--num_clients`: MNIST数据集的客户端数量
 
 - **训练参数**：
@@ -76,7 +79,7 @@ python main.py --strategy moon --mu 1.0 --temperature 0.5 --lr 0.001 --batch_siz
   - `--optimizer`: 优化器类型 (adam 或 sgd)
 
 - **算法参数**：
-  - `--strategy`: 联邦学习策略 (fedavg, fedprox, moon)
+  - `--strategy`: 联邦学习策略 (fedavg, fedprox, moon, scaffold)
   - `--mu`: FedProx和MOON算法的正则化参数
   - `--temperature`: MOON算法的温度参数
 
@@ -153,6 +156,15 @@ fl_server = FLServer(
     temperature=0.5    # MOON的温度参数
 )
 
+# 使用SCAFFOLD算法
+fl_server = FLServer(
+    client_list=client_list,
+    strategy="scaffold",
+    model_config=model_config,
+    client_dataset_dict=dataset_dict,
+    lr=0.05            # SCAFFOLD通常使用较高的学习率
+)
+
 history = fl_server.fit(comm_rounds=100, ratio_client=1)  # 100个通信轮次,每次选取客户端比例
 ```
 
@@ -166,6 +178,19 @@ plot_global_metrics(history)  # 全局性能指标
 plot_worker_metrics(history)  # 每个客户端的性能指标
 ```
 
+### 算法对比实验
+
+框架提供了一个便捷的对比脚本 `run_comparison.sh`，可以自动运行所有支持的算法并生成对比结果：
+
+```bash
+# 运行所有算法的对比实验
+bash run_comparison.sh
+
+# 生成的对比图表位于 ./plots/comparison/ 目录
+```
+
+对比实验会展示不同算法在训练损失、测试损失和测试准确率上的表现差异，有助于选择最适合特定场景的联邦学习算法。
+
 ## 贡献
 
 欢迎提交问题（issues）和拉取请求（pull requests）以改进本项目。如果你有任何建议或功能需求，也可以在问题区留言。
@@ -173,4 +198,3 @@ plot_worker_metrics(history)  # 每个客户端的性能指标
 ## 许可证
 
 本项目采用 [Apache-2.0](LICENSE.txt)。
-

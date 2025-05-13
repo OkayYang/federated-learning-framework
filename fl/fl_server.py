@@ -8,7 +8,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from fl.aggregation.aggregator import average_weight
+from fl.aggregation.aggregator import average_scaffold_parameter_c, average_weight
 from fl.fl_base import ModelConfig
 from fl.strategy import create_client
 
@@ -53,9 +53,22 @@ class FLServer:
         """
         # 迭代训练过程
         global_weight = self.initialize_client_weights()
-        for round_num in range(comm_rounds):
+        
+        # 初始化SCAFFOLD全局控制变量
+        global_c = None
+        if self.strategy == "scaffold":
+            import torch
+            global_c = []
+            # 获取一个客户端模型结构
+            first_client = next(iter(self._workers.values()))
+            for param in first_client.model.parameters():
+                # 初始化为零张量
+                global_c.append(torch.zeros_like(param).detach().cpu())
+            print("已初始化SCAFFOLD全局控制变量")
+            
+        for round_num in range(1, comm_rounds+1):
             print("\n" + "="*50)
-            print(f"Round {round_num + 1}/{comm_rounds}")
+            print(f"Round {round_num}/{comm_rounds}")
             print("="*50)
             
             # 选择部分客户端进行训练
@@ -65,25 +78,25 @@ class FLServer:
                     list(self._workers.keys()), int(len(self._workers) * ratio_client)
                 )
             }
-            client_weight_list = []
-            sample_num_list = []
-            train_loss_list = []
-            accuracy_list = []
-            test_loss_list = []
+            
+            
 
             # 训练
-            for client_name, worker in selected_workers.items():  # 客户端训练并记录数据
-                client_weight, sample_num, train_loss = worker.local_train(
-                    sync_round=round_num, weights=global_weight
-                )
-                client_weight_list.append(client_weight)
-                sample_num_list.append(sample_num)
-                # 保存每个worker的训练损失
-                train_loss_list.append(train_loss)
-
-                self.history["workers"][client_name]["train_loss"].append(train_loss)
+            if self.strategy == "scaffold":
+                global_weight, train_loss_list, global_c = self.fit_scaffold(selected_workers, 
+                                                                             round_num, global_weight,
+                                                                               global_c)
+            elif self.strategy == "fedavg":
+                global_weight, train_loss_list = self.fit_fedavg(selected_workers, round_num, global_weight)
+            elif self.strategy == "fedprox":
+                global_weight, train_loss_list = self.fit_fedprox(selected_workers, round_num, global_weight)
+            elif self.strategy == "moon":
+                global_weight, train_loss_list = self.fit_moon(selected_workers, round_num, global_weight)
+            
 
             # 评估
+            accuracy_list = []
+            test_loss_list = []
             print("\nEvaluating clients...")
             for client_name, worker in tqdm(
                 selected_workers.items(), desc="Progress", unit="client"
@@ -113,7 +126,59 @@ class FLServer:
             print(f"├─ Test Accuracy: {avg_accuracy:.2%}")
             print(f"└─ Test Loss: {avg_test_loss:.4f}")
 
-            # 聚合客户端的模型更新
-            global_weight = average_weight(client_weight_list, sample_num_list)
 
         return self.history
+    def fit_scaffold(self, selected_workers,round_num, global_weight, global_c):
+        client_weight_list = []
+        client_c_list = []  # 客户端的控制变量（完整值，不是增量）
+        sample_num_list = []
+        train_loss_list = []
+        
+        # 参与本轮的客户端数量
+        num_clients = len(selected_workers)
+        # 总客户端数量
+        total_clients = len(self._workers)
+        
+        for client_name, worker in selected_workers.items():
+            # 传递全局模型和全局控制变量到客户端
+            client_weight, sample_num, train_loss, c_delta = worker.local_train(
+                sync_round=round_num, weights=global_weight, cg=global_c
+            )
+            client_weight_list.append(client_weight)
+            sample_num_list.append(sample_num)
+            
+            # 收集完整的控制变量，而不是变化量
+            # 如果客户端返回的是增量，我们需要计算完整值
+            if self.strategy == "scaffold":
+                # 假设客户端的实现已经被修改，直接返回其完整的控制变量self.c
+                # 如果依然返回的是增量，需要在此处进行相应的转换
+                client_c_list.append(c_delta)  
+            
+            train_loss_list.append(train_loss)
+            self.history["workers"][client_name]["train_loss"].append(train_loss)
+        
+        # 聚合模型权重
+        global_weight = average_weight(client_weight_list, sample_num_list)
+        global_c = average_scaffold_parameter_c(client_c_list, sample_num_list)
+            
+            
+        return global_weight, train_loss_list, global_c
+    
+    def fit_fedavg(self, selected_workers,round_num, global_weight):
+        return self.fit_common(selected_workers,round_num, global_weight)
+    def fit_fedprox(self, selected_workers,round_num, global_weight):
+        return self.fit_common(selected_workers,round_num, global_weight)
+    def fit_moon(self, selected_workers,round_num, global_weight):
+        return self.fit_common(selected_workers,round_num, global_weight)
+    def fit_common(self, selected_workers,round_num, global_weight):
+        client_weight_list = []
+        sample_num_list = []
+        train_loss_list = []
+        for client_name, worker in selected_workers.items():
+            client_weight, sample_num, train_loss = worker.local_train(sync_round=round_num, weights=global_weight)
+            client_weight_list.append(client_weight)
+            sample_num_list.append(sample_num)
+            train_loss_list.append(train_loss)
+            self.history["workers"][client_name]["train_loss"].append(train_loss)
+        global_weight = average_weight(client_weight_list, sample_num_list)
+        return global_weight, train_loss_list

@@ -18,9 +18,6 @@ SEED=42
 PARTITION="noidd"  # 仅对MNIST有效: idd, noidd
 NUM_CLIENTS=10     # 仅对MNIST有效
 
-# 创建结果目录
-RESULT_DIR="./plots/comparison_results"
-mkdir -p $RESULT_DIR
 
 # FedProx和MOON的特定参数
 FEDPROX_MU=0.01
@@ -46,8 +43,6 @@ python main.py \
     --partition $PARTITION \
     --num_clients $NUM_CLIENTS
 
-# 复制结果到指定目录
-cp ./plots/history/fedavg_${DATASET}_seed${SEED}.pkl $RESULT_DIR/
 
 # 运行FedProx算法
 echo ""
@@ -69,8 +64,6 @@ python main.py \
     --partition $PARTITION \
     --num_clients $NUM_CLIENTS
 
-# 复制结果到指定目录
-cp ./plots/history/fedprox_${DATASET}_seed${SEED}.pkl $RESULT_DIR/
 
 # 运行MOON算法
 echo ""
@@ -93,8 +86,28 @@ python main.py \
     --partition $PARTITION \
     --num_clients $NUM_CLIENTS
 
+
+# 运行Scaffold算法
+echo ""
+echo "========================================"
+echo "  运行Scaffold算法"
+echo "========================================"
+echo ""
+
+python main.py \
+    --dataset $DATASET \
+    --strategy scaffold \
+    --batch_size $BATCH_SIZE \
+    --local_epochs $LOCAL_EPOCHS \
+    --comm_rounds $COMM_ROUNDS \
+    --lr $LEARNING_RATE \
+    --optimizer $OPTIMIZER \
+    --seed $SEED \
+    --partition $PARTITION \
+    --num_clients $NUM_CLIENTS
+
 # 复制结果到指定目录
-cp ./plots/history/moon_${DATASET}_seed${SEED}.pkl $RESULT_DIR/
+
 
 # 生成对比结果图表
 echo ""
@@ -111,7 +124,6 @@ echo ""
 echo "========================================"
 echo "  算法对比实验完成!"
 echo "========================================"
-echo "结果已保存到 $RESULT_DIR 目录"
 echo "对比图表已保存到 ./plots 目录"
 echo "========================================" 
 echo ""

@@ -10,6 +10,7 @@ from fl.fl_base import ModelConfig
 from fl.strategy.fed_avg import FedAvg
 from fl.strategy.fed_prox import FedProx
 from fl.strategy.moon import Moon
+from fl.strategy.scaffold import Scaffold
 
 
 def create_client(
@@ -66,6 +67,22 @@ def create_client(
         )
     elif strategy == "moon":
         return Moon(
+            client_id,
+            model,
+            loss,
+            optimizer,
+            epochs,
+            batch_size,
+            train_dataLoader,
+            test_dataLoader,
+            **kwargs
+        )
+    elif strategy == "scaffold":
+        # 为SCAFFOLD设置更高的学习率，如果没有在kwargs中指定
+        if 'lr' not in kwargs:
+            kwargs['lr'] = 0.05  # 使用更高的默认学习率
+        
+        return Scaffold(
             client_id,
             model,
             loss,

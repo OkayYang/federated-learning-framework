@@ -59,6 +59,7 @@ Thumbs.db
 *.sqlite
 *.db
 *.pth
+*.pkl
 # Test and coverage reports
 *.coveragerc
 .coverage
