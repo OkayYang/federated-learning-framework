@@ -167,8 +167,8 @@ def parse_arguments():
     # 数据集相关参数
     parser.add_argument('--dataset', type=str, default='femnist', choices=['femnist', 'mnist'],
                         help='要使用的数据集 (femnist 或 mnist)')
-    parser.add_argument('--partition', type=str, default='noidd', choices=['iid', 'noidd', 'dirichlet'],
-                        help='数据分区方式 (iid 或 noidd 或 dirichlet)')
+    parser.add_argument('--partition', type=str, default='noiid', choices=['iid', 'noiid', 'dirichlet'],
+                        help='数据分区方式 (iid 或 noiid 或 dirichlet)')
     parser.add_argument('--num_clients', type=int, default=10,
                         help='当使用MNIST数据集时的客户端数量')
     parser.add_argument('--beta', type=float, default=0.4,
@@ -189,8 +189,8 @@ def parse_arguments():
                         help='优化器类型')
     
     # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='fedavg', 
-                        choices=['fedavg', 'fedprox', 'moon'],
+    parser.add_argument('--strategy', type=str, default='scaffold',
+                        choices=['fedavg', 'fedprox', 'moon', 'scaffold'],
                         help='联邦学习策略')
     parser.add_argument('--mu', type=float, default=0.01,
                         help='FedProx和MOON算法的mu参数')

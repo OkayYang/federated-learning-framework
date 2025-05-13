@@ -314,12 +314,12 @@ def partition_data_by_dirichlet(train_data, train_labels, test_data, test_labels
     return client_train_data, client_train_labels, client_test_data, client_test_labels
 
 
-def load_mnist_dataset(client_list, transform=None, partition="noidd", beta=0.4, seed=42):
+def load_mnist_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42):
     """
     加载 MNIST 数据集，并根据指定的划分方式保存数据。
     :param client_list: 客户端列表
     :param transform: 数据预处理转换
-    :param partition: 划分方式，"iid"、"noidd"或"dirichlet"
+    :param partition: 划分方式，"iid"、"noiid"或"dirichlet"
     :param beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
     :param seed: 随机种子
     :return: 按客户端划分的训练集和测试集，并保存为 .json 格式
@@ -413,7 +413,7 @@ def load_mnist_dataset(client_list, transform=None, partition="noidd", beta=0.4,
                 ),
             }
         
-    elif partition == "noidd":
+    elif partition == "noiid":
         # 现有的非IID划分方式
         label_to_data = {i: [] for i in range(10)}
         for i, label in enumerate(train_labels):
@@ -473,7 +473,7 @@ def load_mnist_dataset(client_list, transform=None, partition="noidd", beta=0.4,
                 ),
             }
     else:
-        raise ValueError(f"不支持的划分方式: {partition}，请使用 'iid', 'noidd' 或 'dirichlet'")
+        raise ValueError(f"不支持的划分方式: {partition}，请使用 'iid', 'noiid' 或 'dirichlet'")
 
     
     # 返回包含每个客户端数据的字典
