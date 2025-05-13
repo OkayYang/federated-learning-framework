@@ -17,13 +17,15 @@ class FeMNISTNet(nn.Module):
         self.fc1 = nn.Linear(16 * 4 * 4, 128)  # 4x4是通过两次2x2的池化层得到的
         self.fc2 = nn.Linear(128, 62)
 
-    def forward(self, x):
+    def forward(self, x, return_all=False):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 4 * 4)
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
+        h = x.view(-1, 16 * 4 * 4)
+        x = self.fc1(h)
+        y = self.fc2(F.relu(x))
+        if return_all:
+            return h, x, y
+        return y
 
 
 # 定义简单的 CNN 模型
