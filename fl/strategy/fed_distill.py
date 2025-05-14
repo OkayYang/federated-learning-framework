@@ -14,7 +14,9 @@ class FedDistill(BaseClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Get number of classes from the model's output layer
-        self.num_classes = 62
+        self.num_classes = kwargs.get('num_classes')
+        if self.num_classes is None:
+            raise ValueError("num_classes must be provided")
         
         # Initialize logit storage for knowledge distillation
         self.logit_storage = {}  # Store averaged logits for each class
