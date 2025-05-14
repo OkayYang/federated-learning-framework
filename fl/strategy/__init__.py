@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from fl.fl_base import ModelConfig
 from fl.strategy.fed_avg import FedAvg
+from fl.strategy.fed_distill import FedDistill
 from fl.strategy.fed_prox import FedProx
 from fl.strategy.moon import Moon
 from fl.strategy.scaffold import Scaffold
@@ -93,5 +94,18 @@ def create_client(
             test_dataLoader,
             **kwargs
         )
+    elif strategy == "feddistill":
+        return FedDistill(
+            client_id,
+            model,
+            loss,
+            optimizer,
+            epochs,
+            batch_size,
+            train_dataLoader,
+            test_dataLoader,
+            **kwargs
+        )
+    
     else:
         raise ValueError(f"Unknown strategy: {strategy}")

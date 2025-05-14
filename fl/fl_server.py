@@ -7,8 +7,9 @@ import random
 import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import tqdm
+import torch
 
-from fl.aggregation.aggregator import average_scaffold_parameter_c, average_weight
+from fl.aggregation.aggregator import average_logits, average_scaffold_parameter_c, average_weight
 from fl.fl_base import ModelConfig
 from fl.strategy import create_client
 
@@ -56,15 +57,8 @@ class FLServer:
         
         # 初始化SCAFFOLD全局控制变量
         global_c = None
-        if self.strategy == "scaffold":
-            import torch
-            global_c = []
-            # 获取一个客户端模型结构
-            first_client = next(iter(self._workers.values()))
-            for param in first_client.model.parameters():
-                # 初始化为零张量
-                global_c.append(torch.zeros_like(param).detach().cpu())
-            print("已初始化SCAFFOLD全局控制变量")
+        global_logits = None
+            
             
         for round_num in range(1, comm_rounds+1):
             print("\n" + "="*50)
@@ -92,6 +86,12 @@ class FLServer:
                 global_weight, train_loss_list = self.fit_fedprox(selected_workers, round_num, global_weight)
             elif self.strategy == "moon":
                 global_weight, train_loss_list = self.fit_moon(selected_workers, round_num, global_weight)
+            elif self.strategy == "feddistill":
+                global_weight, train_loss_list, global_logits = self.fit_fed_distill(selected_workers, 
+                                                                                     round_num, global_weight,
+                                                                                     global_logits)
+            else:
+                raise ValueError(f"Unknown strategy: {self.strategy}")
             
 
             # 评估
@@ -130,7 +130,7 @@ class FLServer:
         return self.history
     def fit_scaffold(self, selected_workers,round_num, global_weight, global_c):
         client_weight_list = []
-        client_c_list = []  # 客户端的控制变量（完整值，不是增量）
+        client_c_list = []  # 客户端的控制变量
         sample_num_list = []
         train_loss_list = []
         
@@ -141,18 +141,12 @@ class FLServer:
         
         for client_name, worker in selected_workers.items():
             # 传递全局模型和全局控制变量到客户端
-            client_weight, sample_num, train_loss, c_delta = worker.local_train(
+            client_weight, sample_num, train_loss, c = worker.local_train(
                 sync_round=round_num, weights=global_weight, cg=global_c
             )
             client_weight_list.append(client_weight)
             sample_num_list.append(sample_num)
-            
-            # 收集完整的控制变量，而不是变化量
-            # 如果客户端返回的是增量，我们需要计算完整值
-            if self.strategy == "scaffold":
-                # 假设客户端的实现已经被修改，直接返回其完整的控制变量self.c
-                # 如果依然返回的是增量，需要在此处进行相应的转换
-                client_c_list.append(c_delta)  
+            client_c_list.append(c)  
             
             train_loss_list.append(train_loss)
             self.history["workers"][client_name]["train_loss"].append(train_loss)
@@ -163,7 +157,38 @@ class FLServer:
             
             
         return global_weight, train_loss_list, global_c
-    
+
+    def fit_fed_distill(self, selected_workers, round_num, global_weight, global_logits):
+        """
+        Federated Distillation server aggregation
+        """
+        client_weight_list = []
+        client_logits_list = []  # 存储客户端的logits
+        sample_num_list = []
+        train_loss_list = []
+        
+        # 1. 收集所有客户端的权重、logits和训练损失
+        for client_name, worker in selected_workers.items():
+            client_weight, sample_num, train_loss, client_logits = worker.local_train(
+                sync_round=round_num,
+                weights=None, #原论文保持一致
+                global_logits=global_logits
+            )
+            
+            client_weight_list.append(client_weight)
+            client_logits_list.append((client_logits, sample_num))  # 保存logits和样本数
+            sample_num_list.append(sample_num)
+            train_loss_list.append(train_loss)
+            self.history["workers"][client_name]["train_loss"].append(train_loss)
+        
+        # 2. 聚合模型权重（FedAvg方式）
+        global_weight = average_weight(client_weight_list, sample_num_list)
+        
+        # 3. 聚合logits（加权平均）
+        global_logits = average_logits(client_logits_list, sample_num_list)
+        
+        return global_weight, train_loss_list, global_logits
+
     def fit_fedavg(self, selected_workers,round_num, global_weight):
         return self.fit_common(selected_workers,round_num, global_weight)
     def fit_fedprox(self, selected_workers,round_num, global_weight):

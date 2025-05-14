@@ -8,14 +8,14 @@ echo "  联邦学习算法比较实验"
 echo "========================================"
 
 # 设置基本参数
-DATASET="femnist"  # 可选: femnist, mnist
+DATASET="mnist"  # 可选: femnist, mnist
 BATCH_SIZE=64
 LOCAL_EPOCHS=20
-COMM_ROUNDS=50
+COMM_ROUNDS=100
 LEARNING_RATE=0.01
 OPTIMIZER="adam"
 SEED=42
-PARTITION="noidd"  # 仅对MNIST有效: idd, noidd
+PARTITION="noiid"  # 仅对MNIST有效: idd, noiid
 NUM_CLIENTS=10     # 仅对MNIST有效
 
 

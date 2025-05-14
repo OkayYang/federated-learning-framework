@@ -63,3 +63,36 @@ def average_scaffold_parameter_c(data: List, weights: List[float] = None):
             aggregated_c = [c1 + c2 for c1, c2 in zip(aggregated_c, scaled_c)]
 
     return aggregated_c
+
+def average_logits(client_logits_list, sample_num_list):
+    """
+    Aggregate logits from multiple clients using weighted averaging
+    Args:
+        client_logits_list: List of tuples (client_logits, sample_num)
+        sample_num_list: List of sample numbers for each client
+    """
+    total_samples = sum(sample_num_list)
+    normalized_weights = [num / total_samples for num in sample_num_list]
+    
+    # 获取所有可能的标签
+    all_labels = set()
+    for client_logits, _ in client_logits_list:
+        all_labels.update(client_logits.keys())
+    
+    # 初始化全局logits字典
+    global_logits = {}
+    
+    # 对每个标签进行加权平均
+    for label in all_labels:
+        weighted_sum = None
+        for i, (client_logits, _) in enumerate(client_logits_list):
+            if label in client_logits:
+                if weighted_sum is None:
+                    weighted_sum = client_logits[label] * normalized_weights[i]
+                else:
+                    weighted_sum += client_logits[label] * normalized_weights[i]
+        
+        if weighted_sum is not None:
+            global_logits[label] = weighted_sum
+    
+    return global_logits

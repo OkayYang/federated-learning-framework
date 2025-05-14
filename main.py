@@ -190,7 +190,7 @@ def parse_arguments():
     
     # 联邦学习算法相关参数
     parser.add_argument('--strategy', type=str, default='scaffold',
-                        choices=['fedavg', 'fedprox', 'moon', 'scaffold'],
+                        choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill'],
                         help='联邦学习策略')
     parser.add_argument('--mu', type=float, default=0.01,
                         help='FedProx和MOON算法的mu参数')
