@@ -226,7 +226,7 @@ def parse_arguments():
                         help='优化器类型')
     
     # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='fedgen',
+    parser.add_argument('--strategy', type=str, default='fedavg',
                         choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen'],
                         help='联邦学习策略')
     parser.add_argument('--mu', type=float, default=0.01,
@@ -246,7 +246,7 @@ def parse_arguments():
     parser.add_argument('--hidden_dim', type=int, default=256,
                         help='FedGen算法的隐藏层维度')
     parser.add_argument('--num_classes', type=int,
-                        help='FedGen算法的类别数量')
+                        help='FedGen算法和FedDistill算法的类别数量')
     
     # 其他参数
     parser.add_argument('--seed', type=int, default=42,

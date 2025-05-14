@@ -116,92 +116,92 @@ fi
 
 echo "$FEDGEN_COMMENT"
 
-# 运行FedAvg算法
-# echo ""
-# echo "========================================"
-# echo "  运行FedAvg算法"
-# echo "========================================"
-# echo ""
+运行FedAvg算法
+echo ""
+echo "========================================"
+echo "  运行FedAvg算法"
+echo "========================================"
+echo ""
 
-# python main.py \
-#     --dataset $DATASET \
-#     --strategy fedavg \
-#     --batch_size $BATCH_SIZE \
-#     --local_epochs $LOCAL_EPOCHS \
-#     --comm_rounds $COMM_ROUNDS \
-#     --lr $LEARNING_RATE \
-#     --optimizer $OPTIMIZER \
-#     --seed $SEED \
-#     --partition $PARTITION \
-#     --dir_beta $DIR_BETA \
-#     --num_clients $NUM_CLIENTS
-
-
-# # 运行FedProx算法
-# echo ""
-# echo "========================================"
-# echo "  运行FedProx算法"
-# echo "========================================"
-# echo ""
-
-# python main.py \
-#     --dataset $DATASET \
-#     --strategy fedprox \
-#     --batch_size $BATCH_SIZE \
-#     --local_epochs $LOCAL_EPOCHS \
-#     --comm_rounds $COMM_ROUNDS \
-#     --lr $LEARNING_RATE \
-#     --optimizer $OPTIMIZER \
-#     --mu $FEDPROX_MU \
-#     --seed $SEED \
-#     --partition $PARTITION \
-#     --dir_beta $DIR_BETA \
-#     --num_clients $NUM_CLIENTS
+python main.py \
+    --dataset $DATASET \
+    --strategy fedavg \
+    --batch_size $BATCH_SIZE \
+    --local_epochs $LOCAL_EPOCHS \
+    --comm_rounds $COMM_ROUNDS \
+    --lr $LEARNING_RATE \
+    --optimizer $OPTIMIZER \
+    --seed $SEED \
+    --partition $PARTITION \
+    --dir_beta $DIR_BETA \
+    --num_clients $NUM_CLIENTS
 
 
-# # 运行MOON算法
-# echo ""
-# echo "========================================"
-# echo "  运行MOON算法"
-# echo "========================================"
-# echo ""
+# 运行FedProx算法
+echo ""
+echo "========================================"
+echo "  运行FedProx算法"
+echo "========================================"
+echo ""
 
-# python main.py \
-#     --dataset $DATASET \
-#     --strategy moon \
-#     --batch_size $BATCH_SIZE \
-#     --local_epochs $LOCAL_EPOCHS \
-#     --comm_rounds $COMM_ROUNDS \
-#     --lr $LEARNING_RATE \
-#     --optimizer $OPTIMIZER \
-#     --mu $MOON_MU \
-#     --temperature $MOON_TEMP \
-#     --seed $SEED \
-#     --partition $PARTITION \
-#     --dir_beta $DIR_BETA \
-#     --num_clients $NUM_CLIENTS
+python main.py \
+    --dataset $DATASET \
+    --strategy fedprox \
+    --batch_size $BATCH_SIZE \
+    --local_epochs $LOCAL_EPOCHS \
+    --comm_rounds $COMM_ROUNDS \
+    --lr $LEARNING_RATE \
+    --optimizer $OPTIMIZER \
+    --mu $FEDPROX_MU \
+    --seed $SEED \
+    --partition $PARTITION \
+    --dir_beta $DIR_BETA \
+    --num_clients $NUM_CLIENTS
 
 
-# # 运行Scaffold算法
-# echo ""
-# echo "========================================"
-# echo "  运行Scaffold算法"
-# echo "========================================"
-# echo ""
+# 运行MOON算法
+echo ""
+echo "========================================"
+echo "  运行MOON算法"
+echo "========================================"
+echo ""
 
-# python main.py \
-#     --dataset $DATASET \
-#     --strategy scaffold \
-#     --batch_size $BATCH_SIZE \
-#     --local_epochs $LOCAL_EPOCHS \
-#     --comm_rounds $COMM_ROUNDS \
-#     --lr $LEARNING_RATE \
-#     --optimizer $OPTIMIZER \
-#     --seed $SEED \
-#     --partition $PARTITION \
-#     --dir_beta $DIR_BETA \
-#     --num_clients $NUM_CLIENTS \
-#     --num_classes $NUM_CLASSES 
+python main.py \
+    --dataset $DATASET \
+    --strategy moon \
+    --batch_size $BATCH_SIZE \
+    --local_epochs $LOCAL_EPOCHS \
+    --comm_rounds $COMM_ROUNDS \
+    --lr $LEARNING_RATE \
+    --optimizer $OPTIMIZER \
+    --mu $MOON_MU \
+    --temperature $MOON_TEMP \
+    --seed $SEED \
+    --partition $PARTITION \
+    --dir_beta $DIR_BETA \
+    --num_clients $NUM_CLIENTS
+
+
+# 运行Scaffold算法
+echo ""
+echo "========================================"
+echo "  运行Scaffold算法"
+echo "========================================"
+echo ""
+
+python main.py \
+    --dataset $DATASET \
+    --strategy scaffold \
+    --batch_size $BATCH_SIZE \
+    --local_epochs $LOCAL_EPOCHS \
+    --comm_rounds $COMM_ROUNDS \
+    --lr $LEARNING_RATE \
+    --optimizer $OPTIMIZER \
+    --seed $SEED \
+    --partition $PARTITION \
+    --dir_beta $DIR_BETA \
+    --num_clients $NUM_CLIENTS \
+    --num_classes $NUM_CLASSES 
 
 # 运行FedGen算法
 echo ""
