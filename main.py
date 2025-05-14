@@ -17,7 +17,7 @@ from fl.data import datasets
 # 导入必要的库和模块
 from fl.fl_base import ModelConfig
 from fl.fl_server import FLServer
-from fl.model.model import CIFAR10Net, FeMNISTNet, Generator, MNISTNet
+from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, Generator, MNISTNet
 from fl.utils import (
     optim_wrapper,
     plot_client_label_distribution,
@@ -70,6 +70,10 @@ def setup_and_train_federated_model(args):
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar10_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
         model_fn = CIFAR10Net
+    elif args.dataset.lower() == 'cifar100':
+        client_list = ["client_" + str(i) for i in range(args.num_clients)]
+        dataset_dict = datasets.load_cifar100_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
+        model_fn = CIFAR100Net
     else:
         raise ValueError(f"不支持的数据集: {args.dataset}")
     
@@ -121,6 +125,11 @@ def setup_and_train_federated_model(args):
             strategy_params['temperature'] = args.temperature
         else:
             raise ValueError("temperature参数不存在")
+    elif args.strategy.lower() == 'feddistill':
+        if args.num_classes is not None:
+            strategy_params['num_classes'] = args.num_classes
+        else:
+            raise ValueError("num_classes参数不存在")
     elif args.strategy.lower() == 'fedgen':
         if args.latent_dim is not None:
             strategy_params['latent_dim'] = args.latent_dim
@@ -188,12 +197,13 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
     
     # 数据集相关参数
-    parser.add_argument('--dataset', type=str, default='femnist', choices=['femnist', 'mnist', 'cifar10'],
-                        help='要使用的数据集 (femnist 或 mnist 或 cifar10)')
+    parser.add_argument('--dataset', type=str, default='femnist', 
+                        choices=['femnist', 'mnist', 'cifar10', 'cifar100'],
+                        help='要使用的数据集 (femnist, mnist, cifar10, cifar100)')
     parser.add_argument('--partition', type=str, default='noiid', choices=['iid', 'noiid', 'dirichlet'],
                         help='数据分区方式 (iid 或 noiid 或 dirichlet)')
     parser.add_argument('--num_clients', type=int, default=10,
-                        help='当使用MNIST数据集时的客户端数量')
+                        help='当使用MNIST/CIFAR数据集时的客户端数量')
     parser.add_argument('--dir_beta', type=float, default=0.4,
                         help='当使用dirichlet划分方式时的狄利克雷分布的参数')
     

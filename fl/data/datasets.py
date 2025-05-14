@@ -152,6 +152,14 @@ class CIFAR10Dataset(BaseDataset):
         # CIFAR10数据已经是正确的格式 (N x 3 x 32 x 32)，无需额外处理
 
 
+class CIFAR100Dataset(BaseDataset):
+    """CIFAR100数据集类"""
+    def __init__(self, X, Y):
+        super(CIFAR100Dataset, self).__init__(X, Y)
+        
+        # CIFAR100数据已经是正确的格式 (N x 3 x 32 x 32)，无需额外处理
+
+
 def partition_data_by_dirichlet(train_data, train_labels, test_data, test_labels, client_num, num_classes, beta=0.4, seed=42):
     """
     使用狄利克雷分布创建非IID数据分区。
@@ -644,4 +652,58 @@ def load_cifar10_dataset(client_list, transform=None, partition="noiid", beta=0.
         train_data, train_labels, test_data, test_labels, 
         client_list, partition, CIFAR10Dataset, 
         num_classes=10, beta=beta, seed=seed
+    )
+
+
+def load_cifar100_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42):
+    """
+    加载 CIFAR100 数据集，并根据指定的划分方式分发给客户端。
+    
+    Args:
+        client_list: 客户端列表
+        transform: 数据预处理转换
+        partition: 划分方式，"iid"、"noiid"或"dirichlet"
+        beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
+        seed: 随机种子
+        
+    Returns:
+        按客户端划分的训练集和测试集字典
+    """
+    # 初始化数据集加载
+    data_dir = init_dataset_loading("./data/CIFAR100/", transform, seed)
+
+    # 预处理：转换为张量 - 仅用于参考，我们将使用原始数据
+    if transform is None:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+
+    # 下载 CIFAR100 数据集
+    train_dataset = datasets.CIFAR100(
+        root="./data", train=True, download=True, transform=None
+    )
+    test_dataset = datasets.CIFAR100(
+        root="./data", train=False, download=True, transform=None
+    )
+
+    # 直接使用numpy数组
+    train_data = train_dataset.data  # 已经是numpy数组格式 (N, 32, 32, 3)
+    train_labels = np.array(train_dataset.targets)
+    test_data = test_dataset.data  # 已经是numpy数组格式 (N, 32, 32, 3)
+    test_labels = np.array(test_dataset.targets)
+    
+    # CIFAR100图像转换 - 从(N, 32, 32, 3)变换为(N, 3, 32, 32)
+    train_data = np.transpose(train_data, (0, 3, 1, 2)).astype(np.float32)
+    test_data = np.transpose(test_data, (0, 3, 1, 2)).astype(np.float32)
+    
+    # 归一化
+    train_data = train_data / 127.5 - 1.0
+    test_data = test_data / 127.5 - 1.0
+    
+    # 使用统一的划分函数处理数据
+    return partition_dataset(
+        train_data, train_labels, test_data, test_labels, 
+        client_list, partition, CIFAR100Dataset, 
+        num_classes=100, beta=beta, seed=seed
     )
