@@ -54,7 +54,7 @@ class Scaffold(BaseClient):
         total_batches = len(self.train_loader) * self.epochs
         with tqdm(
             total=total_batches,
-            desc=f"Round {sync_round} Client {self.client_id} Training Progress (Scaffold)"
+            desc=f"Client {self.client_id} Training Progress (Scaffold)"
         ) as pbar:
             for epoch in range(self.epochs):  # 多轮本地训练
                 epoch_loss = 0
