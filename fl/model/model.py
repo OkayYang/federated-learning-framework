@@ -11,11 +11,12 @@ class Generator(nn.Module):
     """
     生成器模型，用于生成合成数据样本
     """
-    def __init__(self, latent_dim, feature_dim, hidden_dim=256, num_classes=62):
+    def __init__(self, latent_dim, feature_dim,num_classes,hidden_dim=256):
         super(Generator, self).__init__()
         self.latent_dim = latent_dim
         self.feature_dim = feature_dim
         self.num_classes = num_classes
+        self.hidden_dim = hidden_dim
         
         # 嵌入层，将类别标签转换为嵌入向量
         self.label_embedding = nn.Embedding(num_classes, hidden_dim)

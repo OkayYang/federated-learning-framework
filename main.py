@@ -143,6 +143,10 @@ def setup_and_train_federated_model(args):
             strategy_params['feature_dim'] = args.feature_dim
         else:
             raise ValueError("feature_dim参数不存在")
+        if args.hidden_dim is not None:
+            strategy_params['hidden_dim'] = args.hidden_dim
+        else:
+            raise ValueError("hidden_dim参数不存在")
         strategy_params['generator_model'] = Generator(
             latent_dim=args.latent_dim,
             feature_dim=args.feature_dim,
