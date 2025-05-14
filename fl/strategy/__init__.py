@@ -12,6 +12,7 @@ from fl.strategy.fed_distill import FedDistill
 from fl.strategy.fed_prox import FedProx
 from fl.strategy.moon import Moon
 from fl.strategy.scaffold import Scaffold
+from fl.strategy.fedgen import FedGen
 
 
 def create_client(
@@ -106,6 +107,17 @@ def create_client(
             test_dataLoader,
             **kwargs
         )
-    
+    elif strategy == "fedgen":
+        return FedGen(
+            client_id,
+            model,
+            loss,
+            optimizer,
+            epochs,
+            batch_size,
+            train_dataLoader,
+            test_dataLoader,
+            **kwargs
+        )
     else:
         raise ValueError(f"Unknown strategy: {strategy}")

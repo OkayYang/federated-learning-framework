@@ -17,7 +17,7 @@ from fl.data import datasets
 # 导入必要的库和模块
 from fl.fl_base import ModelConfig
 from fl.fl_server import FLServer
-from fl.model.model import FeMNISTNet, MNISTNet
+from fl.model.model import FeMNISTNet, Generator, MNISTNet
 from fl.utils import (
     optim_wrapper,
     plot_client_label_distribution,
@@ -64,7 +64,7 @@ def setup_and_train_federated_model(args):
         model_fn = FeMNISTNet
     elif args.dataset.lower() == 'mnist':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
-        dataset_dict = datasets.load_mnist_dataset(client_list, partition=args.partition, beta=args.beta, seed=args.seed)
+        dataset_dict = datasets.load_mnist_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
         model_fn = MNISTNet
     else:
         raise ValueError(f"不支持的数据集: {args.dataset}")
@@ -72,7 +72,7 @@ def setup_and_train_federated_model(args):
      # 打印数据分布信息
     print(f"\n数据集划分方式: {args.partition}")
     if args.partition == "dirichlet":
-        print(f"狄利克雷分布参数 beta: {args.beta} (较小的值表示更高的异质性)")
+        print(f"狄利克雷分布参数 dir_beta: {args.dir_beta} (较小的值表示更高的异质性)")
     
     print("\n客户端数据统计:")
     for client in client_list:
@@ -117,6 +117,25 @@ def setup_and_train_federated_model(args):
             strategy_params['temperature'] = args.temperature
         else:
             raise ValueError("temperature参数不存在")
+    elif args.strategy.lower() == 'fedgen':
+        if args.latent_dim is not None:
+            strategy_params['latent_dim'] = args.latent_dim
+        else:
+            raise ValueError("latent_dim参数不存在")
+        if args.num_classes is not None:
+            strategy_params['num_classes'] = args.num_classes
+        else:
+            raise ValueError("num_classes参数不存在")
+        if args.feature_dim is not None:
+            strategy_params['feature_dim'] = args.feature_dim
+        else:
+            raise ValueError("feature_dim参数不存在")
+        strategy_params['generator_model'] = Generator(
+            latent_dim=args.latent_dim,
+            feature_dim=args.feature_dim,
+            hidden_dim=args.hidden_dim,
+            num_classes=args.num_classes
+        )
     
     # 配置模型和训练参数
     model_config = ModelConfig(
@@ -171,15 +190,15 @@ def parse_arguments():
                         help='数据分区方式 (iid 或 noiid 或 dirichlet)')
     parser.add_argument('--num_clients', type=int, default=10,
                         help='当使用MNIST数据集时的客户端数量')
-    parser.add_argument('--beta', type=float, default=0.4,
+    parser.add_argument('--dir_beta', type=float, default=0.4,
                         help='当使用dirichlet划分方式时的狄利克雷分布的参数')
     
     # 训练相关参数
     parser.add_argument('--batch_size', type=int, default=64, 
                         help='训练的批次大小')
-    parser.add_argument('--local_epochs', type=int, default=10,
+    parser.add_argument('--local_epochs', type=int, default=20,
                         help='每个客户端的本地训练轮数')
-    parser.add_argument('--comm_rounds', type=int, default=20,
+    parser.add_argument('--comm_rounds', type=int, default=50,
                         help='联邦学习的通信轮数')
     parser.add_argument('--ratio_client', type=float, default=1.0,
                         help='每轮参与训练的客户端比例')
@@ -189,13 +208,27 @@ def parse_arguments():
                         help='优化器类型')
     
     # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='scaffold',
-                        choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill'],
+    parser.add_argument('--strategy', type=str, default='fedgen',
+                        choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen'],
                         help='联邦学习策略')
     parser.add_argument('--mu', type=float, default=0.01,
                         help='FedProx和MOON算法的mu参数')
     parser.add_argument('--temperature', type=float, default=0.5,
-                        help='MOON算法的temperature参数')
+                        help='MOON和FedDistill算法的temperature参数')
+    parser.add_argument('--gamma', type=float, default=0.5,
+                        help='FedDistill算法的知识蒸馏权重参数')
+    parser.add_argument('--alpha', type=float, default=1.0,
+                        help='FedGen算法的知识蒸馏权重参数')
+    parser.add_argument('--beta', type=float, default=0.5,
+                        help='FedGen算法的生成样本损失权重参数')
+    parser.add_argument('--latent_dim', type=int, default=64,
+                        help='FedGen算法的潜在空间维度')
+    parser.add_argument('--feature_dim', type=int, default=256,
+                        help='FedGen算法的特征维度')
+    parser.add_argument('--hidden_dim', type=int, default=256,
+                        help='FedGen算法的隐藏层维度')
+    parser.add_argument('--num_classes', type=int, default=62,
+                        help='FedGen算法的类别数量')
     
     # 其他参数
     parser.add_argument('--seed', type=int, default=42,

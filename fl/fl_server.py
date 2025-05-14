@@ -2,12 +2,14 @@
 # @Author  : xuxiaoyang
 # @Time    : 2024/11/6 20:31
 # @Describe:
+import copy
 import random
 
 import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 import torch
+import torch.nn.functional as F
 
 from fl.aggregation.aggregator import average_logits, average_scaffold_parameter_c, average_weight
 from fl.fl_base import ModelConfig
@@ -38,6 +40,7 @@ class FLServer:
             },
         }
         self.kwargs = kwargs
+        self.global_generator = self.kwargs.get('generator_model', None)
 
     def initialize_client_weights(self):
         """设置服务器端的全局模型"""
@@ -58,7 +61,11 @@ class FLServer:
         # 初始化SCAFFOLD全局控制变量
         global_c = None
         global_logits = None
-            
+        
+        if self.global_generator is not None:
+            global_generator_weights = self.global_generator.get_weights(return_numpy=True)
+        else:
+            global_generator_weights = None
             
         for round_num in range(1, comm_rounds+1):
             print("\n" + "="*50)
@@ -90,6 +97,10 @@ class FLServer:
                 global_weight, train_loss_list, global_logits = self.fit_fed_distill(selected_workers, 
                                                                                      round_num, global_weight,
                                                                                      global_logits)
+            elif self.strategy == "fedgen":
+                global_weight, train_loss_list, global_logits, global_generator_weights = self.fit_fedgen(
+                    selected_workers, round_num, global_weight, global_logits, global_generator_weights
+                )
             else:
                 raise ValueError(f"Unknown strategy: {self.strategy}")
             
@@ -188,13 +199,139 @@ class FLServer:
         global_logits = average_logits(client_logits_list, sample_num_list)
         
         return global_weight, train_loss_list, global_logits
+    def fit_fedgen(self, selected_workers, round_num, global_weight, global_logits=None, global_generator=None):
+        """
+        FedGen服务器聚合
+        """
+        client_weight_list = []
+        sample_num_list = []
+        train_loss_list = []
+        label_count_list = []
+        client_model_list = []
+        
+        # 1. 客户端训练
+        for client_name, worker in selected_workers.items():
+            client_weight, sample_num, train_loss, label_count = worker.local_train(
+                sync_round=round_num,
+                weights=None,
+                generator_weights=global_generator
+            )
+            client_model_list.append(worker.model)  # 这里仅仅是本地实验，实际中要参数传递
+            client_weight_list.append(client_weight)
+            sample_num_list.append(sample_num)
+            train_loss_list.append(train_loss)
+            label_count_list.append(label_count)
+            self.history["workers"][client_name]["train_loss"].append(train_loss)
+        # 2. 聚合模型权重
+        global_weight = average_weight(client_weight_list, sample_num_list)
+        # 3. 生成器模型训练配置
+        # 3.1 标签权重
+        label_weights = []
+        total_loss = 0
+        total_teacher_loss = 0
+        total_student_loss = 0
+        total_diversity_loss = 0
+        # Compute the weight of each label across all workers
+        for label in range(self.global_generator.num_classes):
+            # Get the count of this label from each worker
+            weights = [
+                label_count.get(label, 0) for label_count in label_count_list
+            ]
+            # Sum the counts, add a small epsilon to avoid division by zero
+            label_sum = np.sum(weights) + 1e-6  # Small tolerance to avoid zero division
 
+            # Compute the weight for this label across all workers
+            label_weights.append(np.array(weights) / label_sum)
+
+        # 3.2 生成器模型训练
+        self.global_generator.train()
+        for i in range(self.global_generator.train_epochs):
+            self.global_generator.optimizer.zero_grad()
+            # 随机生成标签
+            sampled_labels = np.random.choice(
+                self.global_generator.num_classes, self.global_generator.train_batch_size
+            )
+            # 确保转换为PyTorch张量
+            sampled_labels = torch.LongTensor(sampled_labels)
+            # 生成随机噪声
+            eps = torch.randn(self.global_generator.train_batch_size, self.global_generator.latent_dim)
+            # 生成合成数据
+            synthetic_features = self.global_generator(eps, sampled_labels)
+            diversity_loss = self.global_generator.diversity_loss(eps, synthetic_features)
+
+            # Initialize teacher loss
+            teacher_loss = 0
+            teacher_logit = 0
+            for idx in range(len(client_model_list)):
+                # Compute the weight of each label for each worker
+                # 将sampled_labels转换为numpy数组
+                sampled_labels_np = sampled_labels.cpu().numpy()
+                
+                # 创建权重数组
+                batch_weights = np.zeros((len(sampled_labels_np), 1))
+                
+                # 为每个样本获取权重
+                for i, label in enumerate(sampled_labels_np):
+                    batch_weights[i, 0] = label_weights[label][idx]
+                
+                weight = torch.tensor(
+                    batch_weights,
+                    dtype=torch.float32,
+                )
+                expand_weight = np.tile(weight.cpu().numpy(), (1, self.global_generator.num_classes))
+
+                teacher_logits = client_model_list[idx](synthetic_features,start_layer=True)
+
+                # Calculate the weighted teacher loss for each worker
+                teacher_loss_ = torch.mean(
+                    self.global_generator.loss_fn(teacher_logits, sampled_labels)
+                    * weight
+                )
+                teacher_loss += teacher_loss_
+                teacher_logit += teacher_logits * torch.tensor(
+                    expand_weight, dtype=torch.float32
+                )
+             
+
+            # 全局模型当学生,参与方模型logit平均当老师，这里没有维护全局模型，就假装第一个参与方模型
+            global_model = copy.deepcopy(client_model_list[0])
+            # 更新全局模型参数
+            keys = global_model.state_dict().keys()
+            weights_dict = {}
+            for k, v in zip(keys, global_weight):
+                weights_dict[k] = torch.Tensor(np.copy(v))
+            global_model.load_state_dict(weights_dict)
+            student_output = global_model(synthetic_features,start_layer=True)
+            student_loss = F.kl_div(
+                F.log_softmax(student_output, dim=1), F.softmax(teacher_logit, dim=1)
+            )
+            total_student_loss += student_loss
+            # 总损失
+            if self.global_generator.ensemble_beta > 0:
+                loss = (
+                    self.global_generator.ensemble_alpha * teacher_loss
+                    - self.global_generator.ensemble_beta * student_loss
+                    + self.global_generator.ensemble_eta * diversity_loss
+                )
+            else:
+                loss = (
+                    self.global_generator.ensemble_alpha * teacher_loss
+                    + self.global_generator.ensemble_eta * diversity_loss
+                )
+            loss.backward()
+            self.global_generator.optimizer.step()
+        return global_weight, train_loss_list, global_logits, self.global_generator.get_weights(return_numpy=True)
     def fit_fedavg(self, selected_workers,round_num, global_weight):
         return self.fit_common(selected_workers,round_num, global_weight)
     def fit_fedprox(self, selected_workers,round_num, global_weight):
         return self.fit_common(selected_workers,round_num, global_weight)
     def fit_moon(self, selected_workers,round_num, global_weight):
         return self.fit_common(selected_workers,round_num, global_weight)
+    
+
+
+    
+
     def fit_common(self, selected_workers,round_num, global_weight):
         client_weight_list = []
         sample_num_list = []

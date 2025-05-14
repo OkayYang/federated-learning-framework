@@ -5,7 +5,7 @@
 ## 特性
 
 - **自定义数据集**：支持 `FEMNIST` 和 `MNIST` 数据集，适用于联邦学习实验。
-- **联邦学习算法**：实现了 `FedAvg`、`FedProx`、`MOON`、`SCAFFOLD` 算法，未来将扩展支持 `FedBN` 等经典算法、个性化联邦学习算法等。
+- **联邦学习算法**：实现了 `FedAvg`、`FedProx`、`MOON`、`SCAFFOLD`、`FedDistill`、`FedGen` 算法，未来将扩展支持 `FedBN` 等经典算法、个性化联邦学习算法等。
 - **隐私保护功能**：计划加入同态加密和差分隐私等技术，以保证联邦学习过程中的数据隐私。
 
 ## 已实现功能
@@ -15,10 +15,49 @@
 - [x] **MNIST 数据集**：经典的手写数字分类数据集，代码提供了IID和NoIID两种划分方式这个大家比较熟悉就不再过多介绍。
 
 ### 联邦学习算法
-- [x] **FedAvg**：实现了经典的联邦平均算法（Federated Averaging，FedAvg），这是联邦学习中的基础算法。
-- [x] **FedProx**：实现了FedProx算法，通过添加近端正则化项，优化联邦学习中的非独立同分布（Non-IID）问题。
-- [x] **MOON**：实现了MOON (Model-Contrastive Federated Learning)算法，利用对比学习提高联邦学习在Non-IID数据上的性能。
-- [x] **SCAFFOLD**：实现了SCAFFOLD (Stochastic Controlled Averaging for Federated Learning)算法，通过控制变量减少客户端偏差，加速联邦学习收敛。
+
+#### FedAvg
+联邦平均（Federated Averaging）是由Google提出的基础联邦学习算法。它在本地设备上执行多轮梯度下降，然后将参数发送到服务器进行平均，从而构建全局模型。
+
+#### FedProx
+FedProx（Federated Proximal）通过添加近端项来改进FedAvg，限制本地更新与全局模型之间的差异，从而增强系统的鲁棒性，尤其是在异构数据环境中。
+
+#### MOON
+MOON（Model-Contrastive Federated Learning）使用对比学习来解决客户端漂移问题，通过让本地模型不仅学习分类任务，还要最小化与全局模型的表示差异。
+
+#### SCAFFOLD
+SCAFFOLD（Stochastic Controlled Averaging for Federated Learning）使用方差减少技术，通过控制变量来纠正客户端更新的漂移，加速收敛并提高性能。
+
+#### FedDistill
+联邦蒸馏（Federated Distillation）通过传递softmax输出（logits）而非模型参数来实现知识共享，减少通信开销，并使客户端能够使用个性化模型。
+
+#### FedGen
+联邦生成学习（Federated Learning with Generative Models）是一种创新的联邦学习方法，通过生成模型来解决数据异构问题。FedGen使用一个中央生成器来合成特征，帮助客户端学习缺失的类别数据，特别适合解决Non-IID数据分布问题。
+
+**FedGen的主要组件和概念：**
+
+1. **生成器模型**：学习生成特定类别的特征表示，而不需要访问原始数据。
+   
+2. **知识蒸馏**：使用KL散度（Kullback-Leibler散度）将客户端模型的知识转移到生成器和全局模型。
+   - KL散度测量两个概率分布之间的差异，在FedGen中用于：
+     - 确保生成的特征能产生与真实数据类似的分布
+     - 将客户端模型（教师）的知识转移到全局模型（学生）
+   
+3. **温度参数**：控制softmax输出的"软化"程度，影响知识蒸馏过程。
+   - 较高温度（T>1）：使分布更平滑，突出次要类别的信息
+   - 较低温度（T接近1）：使分布更接近原始的硬标签
+   - 适当的温度设置可以更好地捕获模型对不同类别的相似性判断
+
+4. **多样性损失**：鼓励生成器产生多样化的特征，增强模型泛化能力。
+
+**FedGen的优势：**
+
+- **解决类别不平衡**：为缺少或数量少的类别生成合成特征
+- **保护隐私**：只共享模型输出和生成的特征，不需要原始数据
+- **提高泛化性**：通过知识蒸馏和特征生成，全局模型可以学习到更全面的知识
+- **减轻客户端漂移**：生成器提供一致的特征表示，减少模型差异
+
+FedGen结合了生成模型、知识蒸馏和联邦学习的优势，在保持数据隐私的同时显著提高了模型性能，特别是在数据分布不均衡的场景中。
 
 ### 未来计划
 - [ ] **FedBN**：实现 FedBN 算法，用于解决分布式训练中的批量归一化问题。
@@ -61,6 +100,9 @@ python main.py --strategy moon --mu 1.0 --temperature 0.5 --lr 0.001 --batch_siz
 
 # 使用SCAFFOLD算法
 python main.py --strategy scaffold --lr 0.05 --batch_size 64 --local_epochs 10 --comm_rounds 50
+
+# 使用FedGen算法
+python main.py --strategy fedgen --dataset mnist --num_clients 10 --partition dirichlet --dir_beta 0.5 --comm_rounds 50 --local_epochs 20 --latent_dim 64 --feature_dim 256 --hidden_dim 256 --alpha 1.0 --beta 0.5
 ```
 
 #### 可用参数：
@@ -79,9 +121,14 @@ python main.py --strategy scaffold --lr 0.05 --batch_size 64 --local_epochs 10 -
   - `--optimizer`: 优化器类型 (adam 或 sgd)
 
 - **算法参数**：
-  - `--strategy`: 联邦学习策略 (fedavg, fedprox, moon, scaffold)
+  - `--strategy`: 联邦学习策略 (fedavg, fedprox, moon, scaffold, feddistill, fedgen)
   - `--mu`: FedProx和MOON算法的正则化参数
-  - `--temperature`: MOON算法的温度参数
+  - `--temperature`: MOON和FedDistill算法的温度参数
+  - `--alpha`: FedGen算法的知识蒸馏损失权重
+  - `--beta`: FedGen算法的学生损失权重
+  - `--latent_dim`: FedGen算法的生成器潜在空间维度
+  - `--feature_dim`: FedGen算法的特征维度（模型最后层输入维度）
+  - `--hidden_dim`: FedGen算法的生成器隐藏层维度
 
 - **其他参数**：
   - `--seed`: 随机种子，确保实验可重复性
@@ -163,6 +210,28 @@ fl_server = FLServer(
     model_config=model_config,
     client_dataset_dict=dataset_dict,
     lr=0.05            # SCAFFOLD通常使用较高的学习率
+)
+
+# 使用FedDistill算法
+fl_server = FLServer(
+    client_list=client_list,
+    strategy="feddistill",
+    model_config=model_config,
+    client_dataset_dict=dataset_dict,
+    gamma=0.5,         # 知识蒸馏损失权重
+    temperature=2.0    # 温度参数
+)
+
+# 使用FedGen算法
+fl_server = FLServer(
+    client_list=client_list,
+    strategy="fedgen",
+    model_config=model_config,
+    client_dataset_dict=dataset_dict,
+    alpha=1.0,         # 知识蒸馏损失权重
+    beta=0.5,          # 生成样本损失权重
+    latent_dim=64,     # 潜在空间维度
+    gen_lr=0.001       # 生成器学习率
 )
 
 history = fl_server.fit(comm_rounds=100, ratio_client=1)  # 100个通信轮次,每次选取客户端比例
