@@ -45,44 +45,58 @@ if not strategies_data:
     print("没有成功加载任何历史数据")
     exit()
 
-# 创建单张图包含三个子图
-fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+# 为图例预留更多空间，增加高度为标题预留空间
+fig, axes = plt.subplots(1, 3, figsize=(24, 7))
 
-# 1. 训练损失子图
+# 1. 训练损失子图 - 收集所有线条以便放到外部图例
+lines = []
+labels = []
 for strategy, history in strategies_data.items():
     epochs = range(1, len(history["global"]["train_loss"]) + 1)
-    axes[0].plot(epochs, history["global"]["train_loss"], label=f"{strategy}", marker="o", markersize=4)
+    line, = axes[0].plot(epochs, history["global"]["train_loss"], marker="o", markersize=4)
+    # 只在第一个子图收集线条和标签
+    lines.append(line)
+    labels.append(strategy)
 
 axes[0].set_xlabel("Communication Rounds", fontsize=12)
 axes[0].set_ylabel("Training Loss", fontsize=12)
-axes[0].set_title("Global Training Loss", fontsize=14)
-axes[0].legend()
+axes[0].set_title("Global Training Loss", fontsize=14, pad=10)  # 增加标题和图的间距
+# 不在这里显示图例
 axes[0].grid(True)
 
 # 2. 测试损失子图
 for strategy, history in strategies_data.items():
     epochs = range(1, len(history["global"]["test_loss"]) + 1)
-    axes[1].plot(epochs, history["global"]["test_loss"], label=f"{strategy}", marker="s", markersize=4)
+    axes[1].plot(epochs, history["global"]["test_loss"], marker="s", markersize=4)
 
 axes[1].set_xlabel("Communication Rounds", fontsize=12)
 axes[1].set_ylabel("Test Loss", fontsize=12)
-axes[1].set_title("Global Test Loss", fontsize=14)
-axes[1].legend()
+axes[1].set_title("Global Test Loss", fontsize=14, pad=10)  # 增加标题和图的间距
+# 不在这里显示图例
 axes[1].grid(True)
 
 # 3. 测试准确率子图
 for strategy, history in strategies_data.items():
     epochs = range(1, len(history["global"]["test_accuracy"]) + 1)
-    axes[2].plot(epochs, history["global"]["test_accuracy"], label=f"{strategy}", marker="^", markersize=4)
+    axes[2].plot(epochs, history["global"]["test_accuracy"], marker="^", markersize=4)
 
 axes[2].set_xlabel("Communication Rounds", fontsize=12)
 axes[2].set_ylabel("Test Accuracy", fontsize=12)
-axes[2].set_title("Global Test Accuracy", fontsize=14)
-axes[2].legend()
+axes[2].set_title("Global Test Accuracy", fontsize=14, pad=10)  # 增加标题和图的间距
+# 不在这里显示图例
 axes[2].grid(True)
 
-plt.suptitle("Comparison of Different Federated Learning Strategies", fontsize=16)
-plt.tight_layout()
+# 添加整个图表的图例 - 放在右侧
+fig.legend(lines, labels, loc='center right', bbox_to_anchor=(1.0, 0.5), fontsize=12, 
+           title="Strategies", title_fontsize=14)
+
+# 调整布局，为右侧图例和顶部标题预留空间
+plt.tight_layout(rect=[0, 0, 0.85, 0.92])  # 上方也留出空间
+
+# 添加整体标题，并提高它的位置以避免重叠
+plt.suptitle("Comparison of Different Federated Learning Strategies", 
+             fontsize=16, y=0.98)  # y参数调高标题位置
+
 plt.savefig(f"{compare_dir}/strategies_comparison.png", dpi=300, bbox_inches="tight")
 plt.show()
 
