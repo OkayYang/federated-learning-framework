@@ -4,7 +4,7 @@
 
 ## 特性
 
-- **自定义数据集**：支持 `FEMNIST` 和 `MNIST` 数据集，适用于联邦学习实验。
+- **自定义数据集**：支持 `FEMNIST`、`MNIST`、`CIFAR10` 和 `CIFAR100` 数据集，适用于联邦学习实验。
 - **联邦学习算法**：实现了 `FedAvg`、`FedProx`、`MOON`、`SCAFFOLD`、`FedDistill`、`FedGen` 算法，未来将扩展支持 `FedBN` 等经典算法、个性化联邦学习算法等。
 - **隐私保护功能**：计划加入同态加密和差分隐私等技术，以保证联邦学习过程中的数据隐私。
 
@@ -13,6 +13,8 @@
 ### 数据集
 - [x] **FEMNIST 数据集**：FEMNIST（Federated Extended MNIST）是一个用于联邦学习研究的手写字母分类数据集，基于EMNIST数据集扩展而来。与传统的MNIST数据集不同，FEMNIST模拟了分布式环境中的非独立同分布（Non-IID）问题，将数据划分给多个用户，每个用户拥有自己的训练数据。该数据集包含3,550个用户，总共有80,526个样本，平均每个用户有226.83个样本。由于样本数存在差异，标准差为88.94，且标准差与平均数的比值为0.39，表明数据的分布具有一定的波动性。FEMNIST旨在为联邦学习提供更加贴近现实的数据分布，适用于测试和研究分布式训练中的挑战，例如数据隐私保护和异构数据处理。**官方已经给出了按用户划分的[代码用例](https://github.com/TalwalkarLab/leaf)，但由于用户量太大不便于实现，我仅仅从中挑选了几个用户作为测试，因此若使用该数据集不需要在自定义客户端。本人也推荐采用这个数据集更能模拟真实的联邦场景**
 - [x] **MNIST 数据集**：经典的手写数字分类数据集，代码提供了IID和NoIID两种划分方式这个大家比较熟悉就不再过多介绍。
+- [x] **CIFAR10 数据集**：常用的彩色图像分类数据集，包含10个类别的32x32彩色图像。代码提供了IID、Non-IID和基于狄利克雷分布的划分方式。
+- [x] **CIFAR100 数据集**：CIFAR10的扩展版本，包含100个类别的32x32彩色图像。适合测试联邦学习在大量类别情况下的性能。同样支持IID、Non-IID和基于狄利克雷分布的划分方式。
 
 ### 联邦学习算法
 
@@ -60,7 +62,7 @@ SCAFFOLD（Stochastic Controlled Averaging for Federated Learning）使用方差
 FedGen结合了生成模型、知识蒸馏和联邦学习的优势，在保持数据隐私的同时显著提高了模型性能，特别是在数据分布不均衡的场景中。
 
 ### 未来计划
-- [ ] **FedBN**：实现 FedBN 算法，用于解决分布式训练中的批量归一化问题。
+
 - [ ] **同态加密联邦学习**：加入同态加密保护数据隐私，使得在训练过程中不会暴露用户数据。
 - [ ] **差分隐私联邦学习**：实现差分隐私机制，保护用户数据隐私。
 
@@ -96,21 +98,24 @@ python main.py
 python main.py --dataset mnist --strategy fedprox --mu 0.01
 
 # 使用MOON算法，自定义训练参数
-python main.py --strategy moon --mu 1.0 --temperature 0.5 --lr 0.001 --batch_size 32 --local_epochs 5 --comm_rounds 50
+python main.py --strategy moon --batch_size 32 --local_epochs 5 --comm_rounds 50
 
-# 使用SCAFFOLD算法
-python main.py --strategy scaffold --lr 0.05 --batch_size 64 --local_epochs 10 --comm_rounds 50
 
 # 使用FedGen算法
-python main.py --strategy fedgen --dataset mnist --num_clients 10 --partition dirichlet --dir_beta 0.5 --comm_rounds 50 --local_epochs 20 --latent_dim 64 --feature_dim 256 --hidden_dim 256 --alpha 1.0 --beta 0.5
+python main.py --strategy fedgen --dataset mnist --num_clients 10 --partition dirichlet --dir_beta 0.5 --comm_rounds 50 --local_epochs 20 --latent_dim 64 --feature_dim 1600 --hidden_dim 256 --alpha 1.0 --beta 0.5 --num_classes 10
+
+
+# 使用CIFAR100数据集和FedGen算法（更大的类别数量）
+python main.py --strategy fedgen --dataset cifar100 --num_clients 10 --partition dirichlet --dir_beta 0.5 --num_classes 100 --feature_dim 4096 --comm_rounds 50
 ```
 
 #### 可用参数：
 
 - **数据集参数**：
-  - `--dataset`: 指定数据集 (femnist 或 mnist)
-  - `--partition`: 数据分区方式 (iid 或 noiid 或 dirichlet)，仅用于MNIST
-  - `--num_clients`: MNIST数据集的客户端数量
+  - `--dataset`: 指定数据集 (femnist, mnist, cifar10, cifar100)
+  - `--partition`: 数据分区方式 (iid, noiid, dirichlet)，仅用于MNIST/CIFAR系列数据集
+  - `--dir_beta`: 当使用dirichlet划分方式时的狄利克雷分布的参数
+  - `--num_clients`: MNIST/CIFAR系列数据集的客户端数量
 
 - **训练参数**：
   - `--batch_size`: 训练批次大小
@@ -129,6 +134,8 @@ python main.py --strategy fedgen --dataset mnist --num_clients 10 --partition di
   - `--latent_dim`: FedGen算法的生成器潜在空间维度
   - `--feature_dim`: FedGen算法的特征维度（模型最后层输入维度）
   - `--hidden_dim`: FedGen算法的生成器隐藏层维度
+  - `--num_classes`: 数据集的类别数量，对于FedGen等需要明确指定类别数的算法尤为重要
+
 
 - **其他参数**：
   - `--seed`: 随机种子，确保实验可重复性
@@ -184,56 +191,6 @@ fl_server = FLServer(
     client_dataset_dict=dataset_dict
 )
 
-# 使用FedProx算法
-fl_server = FLServer(
-    client_list=client_list,
-    strategy="fedprox",
-    model_config=model_config,
-    client_dataset_dict=dataset_dict,
-    mu=0.01  # FedProx的近端正则化参数
-)
-
-# 使用MOON算法
-fl_server = FLServer(
-    client_list=client_list,
-    strategy="moon",
-    model_config=model_config,
-    client_dataset_dict=dataset_dict,
-    mu=1.0,            # MOON的对比学习权重
-    temperature=0.5    # MOON的温度参数
-)
-
-# 使用SCAFFOLD算法
-fl_server = FLServer(
-    client_list=client_list,
-    strategy="scaffold",
-    model_config=model_config,
-    client_dataset_dict=dataset_dict,
-    lr=0.05            # SCAFFOLD通常使用较高的学习率
-)
-
-# 使用FedDistill算法
-fl_server = FLServer(
-    client_list=client_list,
-    strategy="feddistill",
-    model_config=model_config,
-    client_dataset_dict=dataset_dict,
-    gamma=0.5,         # 知识蒸馏损失权重
-    temperature=2.0    # 温度参数
-)
-
-# 使用FedGen算法
-fl_server = FLServer(
-    client_list=client_list,
-    strategy="fedgen",
-    model_config=model_config,
-    client_dataset_dict=dataset_dict,
-    alpha=1.0,         # 知识蒸馏损失权重
-    beta=0.5,          # 生成样本损失权重
-    latent_dim=64,     # 潜在空间维度
-    gen_lr=0.001       # 生成器学习率
-)
-
 history = fl_server.fit(comm_rounds=100, ratio_client=1)  # 100个通信轮次,每次选取客户端比例
 ```
 
@@ -246,6 +203,27 @@ from fl.utils import plot_global_metrics, plot_worker_metrics
 plot_global_metrics(history)  # 全局性能指标
 plot_worker_metrics(history)  # 每个客户端的性能指标
 ```
+
+### 可视化与对比工具
+
+框架提供了多种可视化工具，用于分析和比较不同联邦学习算法的性能表现。这些工具可以帮助研究人员直观地理解各种策略的优缺点。
+
+#### 策略对比可视化
+
+`compare_strategies.py` 脚本提供了一个全面的可视化工具，用于比较不同联邦学习算法的性能：
+
+```bash
+# 运行策略对比脚本
+python compare_strategies.py
+```
+
+这个脚本会自动:
+1. 从 `./plots/history/` 目录加载所有保存的历史记录文件
+2. 生成三个子图，分别展示:
+   - 训练损失 (Training Loss)
+   - 测试损失 (Test Loss)
+   - 测试准确率 (Test Accuracy)
+
 
 ### 算法对比实验
 
