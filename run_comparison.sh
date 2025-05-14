@@ -15,8 +15,11 @@ COMM_ROUNDS=100
 LEARNING_RATE=0.01
 OPTIMIZER="adam"
 SEED=42
-PARTITION="noiid"  # 仅对MNIST有效: idd, noiid
-NUM_CLIENTS=10     # 仅对MNIST有效
+PARTITION="noiid" 
+NUM_CLIENTS=10  
+DIR_BETA=0.4
+
+
 
 
 # FedProx和MOON的特定参数

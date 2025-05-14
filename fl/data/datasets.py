@@ -81,66 +81,75 @@ def load_feminist_dataset():
     return client_list, datasets_dict  # 返回客户端列表和数据集字典
 
 
-class FemnistDataset(Dataset):
+class BaseDataset(Dataset):
     """
-    一个自定义数据集，继承自PyTorch的Dataset类。
+    基础数据集类，所有自定义数据集类都继承自这个类
     """
-
-    def __init__(self, X, Y):
+    def __init__(self, X, Y, normalize=True):
         """
-        初始化数据集。
-        :param X: 包含图像数据的数组，每个图像数据应为28x28的二维数组。
-        :param Y: 包含图像标签的数组。
+        初始化数据集
+        
+        Args:
+            X: 特征数据
+            Y: 标签数据
+            normalize: 是否对数据进行归一化
         """
         self.X = X
         self.Y = Y
-
+        
         # 确保X和Y是torch张量
-        self.X = torch.tensor(self.X, dtype=torch.float32)
-        self.Y = torch.tensor(self.Y, dtype=torch.long)
+        if not isinstance(self.X, torch.Tensor):
+            # 先确保是numpy数组，避免从列表创建张量导致的警告
+            if isinstance(self.X, list):
+                self.X = np.array(self.X)
+            self.X = torch.tensor(self.X, dtype=torch.float32)
+            
+        if not isinstance(self.Y, torch.Tensor):
+            # 先确保是numpy数组，避免从列表创建张量导致的警告
+            if isinstance(self.Y, list):
+                self.Y = np.array(self.Y)
+            self.Y = torch.tensor(self.Y, dtype=torch.long)
+            
+        # 数据归一化 - 将像素值从[0,255]归一化到[-1,1]
+        if normalize and self.X.max() > 1.0:
+            self.X = (self.X / 127.5) - 1.0
 
-        # 如果图像数据是一维平铺的或者二维的，需要转换为四维张量：N x C x H x W
+    def __len__(self):
+        """返回数据集中的样本数"""
+        return len(self.X)
+
+    def __getitem__(self, idx):
+        """根据给定的索引idx返回一个样本"""
+        return self.X[idx], self.Y[idx]
+
+
+class FemnistDataset(BaseDataset):
+    """FEMNIST数据集类"""
+    def __init__(self, X, Y):
+        super(FemnistDataset, self).__init__(X, Y)
+        
+        # 确保图像数据形状正确 (N x C x H x W)
         if self.X.dim() == 2:  # 假设X是二维的，每行是一个平铺的图像
             self.X = self.X.view(-1, 1, 28, 28)  # 转换为N x 1 x 28 x 28的张量
         elif self.X.dim() == 3:  # 假设X已经是N x 28 x 28
             self.X = self.X.unsqueeze(1)  # 添加通道维，使其成为N x 1 x 28 x 28
-        
-        # 数据归一化 - 将像素值从[0,255]归一化到[-1,1]
-        if self.X.max() > 1.0:
-            self.X = (self.X / 127.5) - 1.0
-
-    def __len__(self):
-        """
-        返回数据集中的样本数。
-        """
-        return len(self.X)
-
-    def __getitem__(self, idx):
-        """
-        根据给定的索引idx返回一个样本。
-        """
-        return self.X[idx], self.Y[idx]
 
 
-class MNISTDataset(Dataset):
-    """
-    自定义数据集类，用于处理 MNIST 数据集。
-    """
-
+class MNISTDataset(BaseDataset):
+    """MNIST数据集类"""
     def __init__(self, X, Y):
-        """
-        初始化数据集。
-        :param X: 图像数据，N x C x H x W。
-        :param Y: 标签数据，N。
-        """
-        self.X = X
-        self.Y = Y
+        super(MNISTDataset, self).__init__(X, Y)
+        
+        # 确保图像数据形状正确 (N x C x H x W)
+        if self.X.dim() == 3:  # 如果X是N x H x W
+            self.X = self.X.unsqueeze(1)  # 添加通道维，使其成为N x 1 x H x W
 
-    def __len__(self):
-        return len(self.X)
 
-    def __getitem__(self, idx):
-        return self.X[idx], self.Y[idx]
+class CIFAR10Dataset(BaseDataset):
+    """CIFAR10数据集类"""
+    def __init__(self, X, Y):
+        super(CIFAR10Dataset, self).__init__(X, Y)
+        # CIFAR10数据已经是正确的格式 (N x 3 x 32 x 32)，无需额外处理
 
 
 def partition_data_by_dirichlet(train_data, train_labels, test_data, test_labels, client_num, num_classes, beta=0.4, seed=42):
@@ -314,26 +323,241 @@ def partition_data_by_dirichlet(train_data, train_labels, test_data, test_labels
     return client_train_data, client_train_labels, client_test_data, client_test_labels
 
 
-def load_mnist_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42):
+def init_dataset_loading(data_dir, transform=None, seed=42):
     """
-    加载 MNIST 数据集，并根据指定的划分方式保存数据。
-    :param client_list: 客户端列表
-    :param transform: 数据预处理转换
-    :param partition: 划分方式，"iid"、"noiid"或"dirichlet"
-    :param beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
-    :param seed: 随机种子
-    :return: 按客户端划分的训练集和测试集，并保存为 .json 格式
+    初始化数据集加载的公共部分
+    
+    Args:
+        data_dir: 数据目录路径
+        transform: 数据转换函数
+        seed: 随机种子
+        
+    Returns:
+        创建好的目录路径
     """
     # 设置随机种子
     random.seed(seed)
     np.random.seed(seed)
 
     # 定义数据的保存路径
-    data_dir = "./data/MNIST/"
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
+        
+    return data_dir
 
-    # 预处理：转换为张量
+
+def partition_data_iid(train_data, train_labels, test_data, test_labels, client_num, seed=42):
+    """
+    按独立同分布(IID)方式划分数据
+    
+    Args:
+        train_data: 训练数据
+        train_labels: 训练标签
+        test_data: 测试数据
+        test_labels: 测试标签
+        client_num: 客户端数量
+        seed: 随机种子
+        
+    Returns:
+        tuple: 客户端训练数据、标签、测试数据、标签的列表
+    """
+    # 设置随机种子
+    np.random.seed(seed)
+    random.seed(seed)
+    
+    # 随机打乱训练数据
+    indices = np.random.permutation(len(train_data))
+    train_data = train_data[indices]
+    train_labels = train_labels[indices]
+    
+    # 随机打乱测试数据
+    test_indices = np.random.permutation(len(test_data))
+    test_data = test_data[test_indices]
+    test_labels = test_labels[test_indices]
+    
+    # 初始化客户端数据
+    client_train_data = [[] for _ in range(client_num)]
+    client_train_labels = [[] for _ in range(client_num)]
+    client_test_data = [[] for _ in range(client_num)]
+    client_test_labels = [[] for _ in range(client_num)]
+    
+    # 均匀划分训练数据给每个客户端
+    samples_per_client = len(train_data) // client_num
+    for i in range(client_num):
+        start_idx = i * samples_per_client
+        end_idx = start_idx + samples_per_client if i < client_num - 1 else len(train_data)
+        
+        client_train_data[i] = train_data[start_idx:end_idx]
+        client_train_labels[i] = train_labels[start_idx:end_idx]
+    
+    # 均匀划分测试数据给每个客户端
+    test_samples_per_client = len(test_data) // client_num
+    for i in range(client_num):
+        start_idx = i * test_samples_per_client
+        end_idx = start_idx + test_samples_per_client if i < client_num - 1 else len(test_data)
+        
+        client_test_data[i] = test_data[start_idx:end_idx]
+        client_test_labels[i] = test_labels[start_idx:end_idx]
+    
+    return client_train_data, client_train_labels, client_test_data, client_test_labels
+
+
+def partition_data_noiid(train_data, train_labels, test_data, test_labels, client_num, num_classes, seed=42):
+    """
+    按非独立同分布(Non-IID)方式划分数据
+    
+    Args:
+        train_data: 训练数据
+        train_labels: 训练标签
+        test_data: 测试数据
+        test_labels: 测试标签
+        client_num: 客户端数量
+        num_classes: 类别数量
+        seed: 随机种子
+        
+    Returns:
+        tuple: 客户端训练数据、标签、测试数据、标签的列表
+    """
+    # 设置随机种子
+    random.seed(seed)
+    np.random.seed(seed)
+    
+    # 确保数据是numpy数组
+    train_data = np.asarray(train_data)
+    train_labels = np.asarray(train_labels)
+    test_data = np.asarray(test_data)
+    test_labels = np.asarray(test_labels)
+    
+    # 按类别整理数据索引，而不是实际数据
+    label_to_indices = {i: [] for i in range(num_classes)}
+    for i, label in enumerate(train_labels):
+        label_to_indices[label].append(i)
+    
+    # 初始化客户端数据
+    client_train_indices = [[] for _ in range(client_num)]
+    client_train_data = [[] for _ in range(client_num)]
+    client_train_labels = [[] for _ in range(client_num)]
+    client_test_data = [[] for _ in range(client_num)]
+    client_test_labels = [[] for _ in range(client_num)]
+    
+    # 为每个客户端分配不均衡的类别样本
+    for client_id in range(client_num):
+        for label, indices in label_to_indices.items():
+            num_samples_per_label = random.randint(1, len(indices) // 2)
+            selected_indices = random.sample(indices, num_samples_per_label)
+            client_train_indices[client_id].extend(selected_indices)
+    
+    # 根据索引提取实际数据
+    for client_id in range(client_num):
+        indices = client_train_indices[client_id]
+        client_train_data[client_id] = train_data[indices]
+        client_train_labels[client_id] = train_labels[indices]
+    
+    # 分配测试数据
+    for label in range(num_classes):
+        # 找到该类别的所有测试样本索引
+        label_test_indices = np.where(test_labels == label)[0]
+        num_samples_for_test = len(label_test_indices) // client_num
+        
+        for client_id in range(client_num):
+            start_idx = client_id * num_samples_for_test
+            end_idx = start_idx + num_samples_for_test if client_id < client_num - 1 else len(label_test_indices)
+            
+            selected_indices = label_test_indices[start_idx:end_idx]
+            client_test_data[client_id].extend(test_data[selected_indices])
+            client_test_labels[client_id].extend(test_labels[selected_indices])
+    
+    # 最后进行一次数组转换，确保格式一致
+    for client_id in range(client_num):
+        client_train_data[client_id] = np.array(client_train_data[client_id])
+        client_train_labels[client_id] = np.array(client_train_labels[client_id])
+        client_test_data[client_id] = np.array(client_test_data[client_id])
+        client_test_labels[client_id] = np.array(client_test_labels[client_id])
+    
+    return client_train_data, client_train_labels, client_test_data, client_test_labels
+
+
+def partition_dataset(train_data, train_labels, test_data, test_labels, client_list, partition, dataset_class, num_classes, beta=0.4, seed=42):
+    """
+    统一数据集划分函数，根据指定的划分方式划分数据
+    
+    Args:
+        train_data: 训练数据
+        train_labels: 训练标签
+        test_data: 测试数据
+        test_labels: 测试标签
+        client_list: 客户端列表
+        partition: 划分方式 ("iid", "noiid", "dirichlet")
+        dataset_class: 数据集类 (MNISTDataset, CIFAR10Dataset等)
+        num_classes: 类别数量
+        beta: 狄利克雷分布参数 (仅用于dirichlet划分)
+        seed: 随机种子
+        
+    Returns:
+        dict: 客户端数据集字典
+    """
+    # 确保数据是numpy数组格式
+    if isinstance(train_data, list):
+        train_data = np.array(train_data)
+    if isinstance(train_labels, list):
+        train_labels = np.array(train_labels)
+    if isinstance(test_data, list):
+        test_data = np.array(test_data)
+    if isinstance(test_labels, list):
+        test_labels = np.array(test_labels)
+        
+    num_clients = len(client_list)
+    datasets_dict = {}
+    
+    # 根据划分方式选择合适的划分函数
+    if partition == "iid":
+        client_train_data, client_train_labels, client_test_data, client_test_labels = partition_data_iid(
+            train_data, train_labels, test_data, test_labels, num_clients, seed
+        )
+    elif partition == "noiid":
+        client_train_data, client_train_labels, client_test_data, client_test_labels = partition_data_noiid(
+            train_data, train_labels, test_data, test_labels, num_clients, num_classes, seed
+        )
+    elif partition == "dirichlet":
+        client_train_data, client_train_labels, client_test_data, client_test_labels = partition_data_by_dirichlet(
+            train_data, train_labels, test_data, test_labels, num_clients, num_classes, beta, seed
+        )
+    else:
+        raise ValueError(f"不支持的划分方式: {partition}，请使用 'iid', 'noiid' 或 'dirichlet'")
+    
+    # 为每个客户端创建数据集
+    for i, client in enumerate(client_list):
+        # 创建训练集和测试集
+        train_dataset = dataset_class(client_train_data[i], client_train_labels[i])
+        test_dataset = dataset_class(client_test_data[i], client_test_labels[i])
+        
+        # 添加到数据集字典
+        datasets_dict[client] = {
+            "train_dataset": train_dataset,
+            "test_dataset": test_dataset,
+        }
+    
+    return datasets_dict
+
+
+def load_mnist_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42):
+    """
+    加载 MNIST 数据集，并根据指定的划分方式分发给客户端。
+    
+    Args:
+        client_list: 客户端列表
+        transform: 数据预处理转换
+        partition: 划分方式，"iid"、"noiid"或"dirichlet"
+        beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
+        seed: 随机种子
+        
+    Returns:
+        按客户端划分的训练集和测试集字典
+    """
+    # 初始化数据集加载
+    data_dir = init_dataset_loading("./data/MNIST/", transform, seed)
+
+    # 预处理：转换为张量 - 仅用于参考，我们将使用原始数据
     if transform is None:
         transform = transforms.Compose(
             [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]
@@ -341,140 +565,83 @@ def load_mnist_dataset(client_list, transform=None, partition="noiid", beta=0.4,
 
     # 下载 MNIST 数据集
     train_dataset = datasets.MNIST(
-        root="./data", train=True, download=True, transform=transform
+        root="./data", train=True, download=True, transform=None
     )
     test_dataset = datasets.MNIST(
-        root="./data", train=False, download=True, transform=transform
+        root="./data", train=False, download=True, transform=None
     )
 
-    train_data, train_labels = train_dataset.data.numpy(), train_dataset.targets.numpy()
-    test_data, test_labels = test_dataset.data.numpy(), test_dataset.targets.numpy()
-
-    # 初始化数据字典
-    datasets_dict = {}
-    num_clients = len(client_list)
-
-    if partition == "iid":
-        # 独立同分布 (IID) 划分
-        # 随机打乱训练数据
-        indices = np.random.permutation(len(train_data))
-        train_data = train_data[indices]
-        train_labels = train_labels[indices]
-        
-        # 均匀划分给每个客户端
-        samples_per_client = len(train_data) // num_clients
-        
-        for i, client in enumerate(client_list):
-            start_idx = i * samples_per_client
-            end_idx = start_idx + samples_per_client if i < num_clients - 1 else len(train_data)
-            
-            client_train_data = train_data[start_idx:end_idx]
-            client_train_labels = train_labels[start_idx:end_idx]
-            
-            # 同样处理测试数据
-            test_indices = np.random.permutation(len(test_data))
-            test_samples_per_client = len(test_data) // num_clients
-            test_start_idx = i * test_samples_per_client
-            test_end_idx = test_start_idx + test_samples_per_client if i < num_clients - 1 else len(test_data)
-            
-            client_test_data = test_data[test_indices[test_start_idx:test_end_idx]]
-            client_test_labels = test_labels[test_indices[test_start_idx:test_end_idx]]
-            
-            # 转换为合适的格式
-            client_train_data = torch.tensor(client_train_data, dtype=torch.float32).unsqueeze(1)
-            client_test_data = torch.tensor(client_test_data, dtype=torch.float32).unsqueeze(1)
-            
-            datasets_dict[client] = {
-                "train_dataset": MNISTDataset(
-                    client_train_data.numpy(), client_train_labels
-                ),
-                "test_dataset": MNISTDataset(
-                    client_test_data.numpy(), client_test_labels
-                ),
-            }
-            
-    elif partition == "dirichlet":
-        # 基于狄利克雷分布的非IID划分
-        client_train_data, client_train_labels, client_test_data, client_test_labels = partition_data_by_dirichlet(
-            train_data, train_labels, test_data, test_labels, num_clients, 10, beta, seed
-        )
-        
-        for i, client in enumerate(client_list):
-            # 转换为合适的格式
-            train_data_tensor = torch.tensor(np.array(client_train_data[i]), dtype=torch.float32).unsqueeze(1)
-            test_data_tensor = torch.tensor(np.array(client_test_data[i]), dtype=torch.float32).unsqueeze(1)
-            
-            datasets_dict[client] = {
-                "train_dataset": MNISTDataset(
-                    train_data_tensor.numpy(), np.array(client_train_labels[i])
-                ),
-                "test_dataset": MNISTDataset(
-                    test_data_tensor.numpy(), np.array(client_test_labels[i])
-                ),
-            }
-        
-    elif partition == "noiid":
-        # 现有的非IID划分方式
-        label_to_data = {i: [] for i in range(10)}
-        for i, label in enumerate(train_labels):
-            label_to_data[label].append((train_data[i], label))
-
-        for i, client in enumerate(client_list):
-            client_train_data = []
-            client_train_labels = []
-            client_test_data = []
-            client_test_labels = []
-
-            for label, data_list in label_to_data.items():
-                num_samples_per_label = random.randint(1, len(data_list) // 2)
-                selected_train_data = random.sample(data_list, num_samples_per_label)
-                for image, label in selected_train_data:
-                    client_train_data.append(image)
-                    client_train_labels.append(label)
-
-            for label, data_list in label_to_data.items():
-                test_data_for_label = [
-                    x for x in zip(test_data, test_labels) if x[1] == label
-                ]
-                num_samples_for_test = len(test_data_for_label) // num_clients
-                client_test_data.extend(
-                    [
-                        x[0]
-                        for x in test_data_for_label[
-                            i * num_samples_for_test : (i + 1) * num_samples_for_test
-                        ]
-                    ]
-                )
-                client_test_labels.extend(
-                    [
-                        x[1]
-                        for x in test_data_for_label[
-                            i * num_samples_for_test : (i + 1) * num_samples_for_test
-                        ]
-                    ]
-                )
-
-            client_train_data = np.array(client_train_data)
-            client_train_data = torch.tensor(
-                client_train_data, dtype=torch.float32
-            ).unsqueeze(1)
-
-            client_test_data = np.array(client_test_data)
-            client_test_data = torch.tensor(
-                client_test_data, dtype=torch.float32
-            ).unsqueeze(1)
-
-            datasets_dict[client] = {
-                "train_dataset": MNISTDataset(
-                    client_train_data.numpy(), np.array(client_train_labels)
-                ),
-                "test_dataset": MNISTDataset(
-                    client_test_data.numpy(), np.array(client_test_labels)
-                ),
-            }
-    else:
-        raise ValueError(f"不支持的划分方式: {partition}，请使用 'iid', 'noiid' 或 'dirichlet'")
-
+    # 直接使用numpy数组
+    train_data = train_dataset.data.numpy()
+    train_labels = train_dataset.targets.numpy()
+    test_data = test_dataset.data.numpy()
+    test_labels = test_dataset.targets.numpy()
     
-    # 返回包含每个客户端数据的字典
-    return datasets_dict
+    # 添加通道维度并转换为float32
+    train_data = train_data.reshape(-1, 1, 28, 28).astype(np.float32)
+    test_data = test_data.reshape(-1, 1, 28, 28).astype(np.float32)
+    
+    # 归一化
+    train_data = train_data / 127.5 - 1.0
+    test_data = test_data / 127.5 - 1.0
+    
+    # 使用统一的划分函数处理数据
+    return partition_dataset(
+        train_data, train_labels, test_data, test_labels, 
+        client_list, partition, MNISTDataset, 
+        num_classes=10, beta=beta, seed=seed
+    )
+
+
+def load_cifar10_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42):
+    """
+    加载 CIFAR10 数据集，并根据指定的划分方式分发给客户端。
+    
+    Args:
+        client_list: 客户端列表
+        transform: 数据预处理转换
+        partition: 划分方式，"iid"、"noiid"或"dirichlet"
+        beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
+        seed: 随机种子
+        
+    Returns:
+        按客户端划分的训练集和测试集字典
+    """
+    # 初始化数据集加载
+    data_dir = init_dataset_loading("./data/CIFAR10/", transform, seed)
+
+    # 预处理：转换为张量
+    if transform is None:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+
+    # 下载 CIFAR10 数据集
+    train_dataset = datasets.CIFAR10(
+        root="./data", train=True, download=True, transform=None
+    )
+    test_dataset = datasets.CIFAR10(
+        root="./data", train=False, download=True, transform=None
+    )
+
+    # 直接使用numpy数组而不是列表收集数据
+    train_data = train_dataset.data  # 已经是numpy数组格式 (N, 32, 32, 3)
+    train_labels = np.array(train_dataset.targets)
+    test_data = test_dataset.data  # 已经是numpy数组格式 (N, 32, 32, 3)
+    test_labels = np.array(test_dataset.targets)
+    
+    # CIFAR10图像转换 - 从(N, 32, 32, 3)变换为(N, 3, 32, 32)
+    train_data = np.transpose(train_data, (0, 3, 1, 2)).astype(np.float32)
+    test_data = np.transpose(test_data, (0, 3, 1, 2)).astype(np.float32)
+    
+    # 归一化
+    train_data = train_data / 127.5 - 1.0
+    test_data = test_data / 127.5 - 1.0
+    
+    # 使用统一的划分函数处理数据
+    return partition_dataset(
+        train_data, train_labels, test_data, test_labels, 
+        client_list, partition, CIFAR10Dataset, 
+        num_classes=10, beta=beta, seed=seed
+    )

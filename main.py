@@ -17,7 +17,7 @@ from fl.data import datasets
 # 导入必要的库和模块
 from fl.fl_base import ModelConfig
 from fl.fl_server import FLServer
-from fl.model.model import FeMNISTNet, Generator, MNISTNet
+from fl.model.model import CIFAR10Net, FeMNISTNet, Generator, MNISTNet
 from fl.utils import (
     optim_wrapper,
     plot_client_label_distribution,
@@ -66,6 +66,10 @@ def setup_and_train_federated_model(args):
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_mnist_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
         model_fn = MNISTNet
+    elif args.dataset.lower() == 'cifar10':
+        client_list = ["client_" + str(i) for i in range(args.num_clients)]
+        dataset_dict = datasets.load_cifar10_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
+        model_fn = CIFAR10Net
     else:
         raise ValueError(f"不支持的数据集: {args.dataset}")
     
@@ -184,8 +188,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
     
     # 数据集相关参数
-    parser.add_argument('--dataset', type=str, default='femnist', choices=['femnist', 'mnist'],
-                        help='要使用的数据集 (femnist 或 mnist)')
+    parser.add_argument('--dataset', type=str, default='femnist', choices=['femnist', 'mnist', 'cifar10'],
+                        help='要使用的数据集 (femnist 或 mnist 或 cifar10)')
     parser.add_argument('--partition', type=str, default='noiid', choices=['iid', 'noiid', 'dirichlet'],
                         help='数据分区方式 (iid 或 noiid 或 dirichlet)')
     parser.add_argument('--num_clients', type=int, default=10,
@@ -223,11 +227,11 @@ def parse_arguments():
                         help='FedGen算法的生成样本损失权重参数')
     parser.add_argument('--latent_dim', type=int, default=64,
                         help='FedGen算法的潜在空间维度')
-    parser.add_argument('--feature_dim', type=int, default=256,
+    parser.add_argument('--feature_dim', type=int,
                         help='FedGen算法的特征维度')
     parser.add_argument('--hidden_dim', type=int, default=256,
                         help='FedGen算法的隐藏层维度')
-    parser.add_argument('--num_classes', type=int, default=62,
+    parser.add_argument('--num_classes', type=int,
                         help='FedGen算法的类别数量')
     
     # 其他参数
