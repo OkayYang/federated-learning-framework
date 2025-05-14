@@ -16,8 +16,11 @@ class FedGen(BaseClient):
         super().__init__(*args, **kwargs)
         
         # 获取模型最后一层的输入维度作为特征维度
-        self.feature_dim = kwargs.get('feature_dim', 256)
-        self.num_classes = kwargs.get('num_classes', 62)  # 假设FEMNIST有62个类别
+        self.feature_dim = kwargs.get('feature_dim')
+        self.num_classes = kwargs.get('num_classes')  
+        if self.num_classes is None or self.feature_dim is None:
+            raise ValueError("num_classes and feature_dim must be provided")
+        
         
         # 生成器超参数
         self.latent_dim = kwargs.get('latent_dim', 64)
@@ -32,6 +35,10 @@ class FedGen(BaseClient):
             hidden_dim=self.hidden_dim,
             num_classes=self.num_classes
         )
+        
+        # 初始化KL散度损失函数，使用batchmean模式避免警告
+        self.kl_loss = nn.KLDivLoss(reduction='batchmean')
+        
         # 统计标签
         self.label_count = {}
         for data, target in self.train_loader:
@@ -167,8 +174,8 @@ class FedGen(BaseClient):
         # 应用温度缩放到学生logits
         student_log_softmax = F.log_softmax(logits / temperature, dim=1)
         
-        # 计算KL散度损失
-        kd_loss = -(smooth_targets * student_log_softmax).sum(dim=1).mean()
+        # 使用KLDivLoss计算知识蒸馏损失
+        kd_loss = self.kl_loss(student_log_softmax, smooth_targets)
         
         # 应用温度平方调整梯度
         return kd_loss * (temperature ** 2)

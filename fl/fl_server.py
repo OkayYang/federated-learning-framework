@@ -303,7 +303,7 @@ class FLServer:
             global_model.load_state_dict(weights_dict)
             student_output = global_model(synthetic_features,start_layer=True)
             student_loss = F.kl_div(
-                F.log_softmax(student_output, dim=1), F.softmax(teacher_logit, dim=1)
+                F.log_softmax(student_output, dim=1), F.softmax(teacher_logit, dim=1), reduction='batchmean'
             )
             total_student_loss += student_loss
             # 总损失
