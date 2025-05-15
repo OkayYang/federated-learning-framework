@@ -54,7 +54,7 @@ class FedProx(BaseClient):
                     output = self.model(data)  # 前向传播
                     loss = self.loss(output, target)  # 计算损失
                     if weights is not None:
-                        proximal_term = self.proximal_term(weights,list(self.model.parameters()))
+                        proximal_term = self.proximal_term(weights,self.get_weights(return_numpy=True))
                         loss += self.mu/2 * proximal_term
                     epoch_loss += loss.item()  # 累加损失
                     loss.backward()  # 反向传播
