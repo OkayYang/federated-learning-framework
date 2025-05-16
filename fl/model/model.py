@@ -208,14 +208,14 @@ class CIFAR10Net(nn.Module):
         # 输出层 - 将隐藏空间映射到类别空间
         self.classifier = nn.Linear(256, 10)  # CIFAR10有10个类别
     
-    def forward(self, x, start_layer=False, return_features=False):
+    def forward(self, x, start_layer=False,return_all=False):
         """
         前向传播函数
         
         Args:
             x: 输入数据
             start_layer: 是否从映射层开始（用于fedgen等）
-            return_features: 是否返回特征（用于对比学习等）
+            return_all: 是否返回特征（用于对比学习等）
             
         Returns:
             模型输出
@@ -234,7 +234,7 @@ class CIFAR10Net(nn.Module):
         # 通过输出层获得类别预测
         logits = self.classifier(hidden)
         
-        if return_features:
+        if return_all:
             # 返回中间特征表示（用于对比学习、特征可视化等）
             return features, hidden, logits
         
@@ -306,14 +306,14 @@ class CIFAR100Net(nn.Module):
         # 输出层 - 将隐藏空间映射到类别空间
         self.classifier = nn.Linear(512, 100)  # CIFAR100有100个类别
     
-    def forward(self, x, start_layer=False, return_features=False):
+    def forward(self, x, start_layer=False, return_all=False):
         """
         前向传播函数
         
         Args:
             x: 输入数据
             start_layer: 是否从映射层开始（用于fedgen等）
-            return_features: 是否返回特征（用于对比学习等）
+            return_all: 是否返回特征（用于对比学习等）
             
         Returns:
             模型输出
@@ -332,7 +332,7 @@ class CIFAR100Net(nn.Module):
         # 通过输出层获得类别预测
         logits = self.classifier(hidden)
         
-        if return_features:
+        if return_all:
             # 返回中间特征表示（用于对比学习、特征可视化等）
             return features, hidden, logits
         
