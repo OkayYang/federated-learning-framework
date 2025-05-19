@@ -240,14 +240,14 @@ def plot_client_label_distribution(datasets_dict, dataset_name=None):
         plots_dir = "plots"
     os.makedirs(plots_dir, exist_ok=True)
     
-    # 获取客户端ID列表
-    client_ids = list(datasets_dict.keys())
+    # 获取客户端ID列表，排除global数据集
+    client_ids = [client for client in datasets_dict.keys() if client != "global"]
     num_clients = len(client_ids)
     
     # 确定标签数量范围
     max_label = 0
-    for client, data in datasets_dict.items():
-        train_labels = data["train_dataset"].Y
+    for client in client_ids:
+        train_labels = datasets_dict[client]["train_dataset"].Y
         max_label = max(max_label, train_labels.max().item())
     
     num_labels = max_label + 1

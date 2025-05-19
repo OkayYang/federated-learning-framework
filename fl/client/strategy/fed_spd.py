@@ -79,42 +79,46 @@ class FedSPD(BaseClient):
                         
                         # 如果有可用的类别知识
                         if available_classes:
-                            # 将全局表征转换为张量并输入到模型中
+                            # Get global features and targets
                             global_features = []
                             global_targets = []
                             
                             for class_id in available_classes:
-                                # 获取全局表征并转换为张量
+                                # Get global representation and convert to tensor
                                 global_rep = torch.tensor(global_reps[class_id], device=self.device)
                                 global_features.append(global_rep)
                                 
-                                # 获取全局logits
+                                # Get global logits
                                 global_target = torch.tensor(global_logits[class_id], device=self.device)
                                 global_targets.append(global_target)
                             
-                            # 堆叠为批次
+                            # Stack as batch
                             global_features_batch = torch.stack(global_features)
                             global_targets_batch = torch.stack(global_targets)
                             
-                            # 使用torch.no_grad()确保教师模型的输出不会记录梯度
+                            # Use torch.no_grad() to ensure teacher model output doesn't record gradients
                             with torch.no_grad():
-                                # 将全局表征转换为不需要梯度的张量
                                 global_features_batch = global_features_batch.detach()
                                 global_targets_batch = global_targets_batch.detach()
                                 
-                                # 应用温度缩放到教师模型的输出
+                                # Apply temperature scaling to teacher model output
                                 global_targets_scaled = global_targets_batch / self.temperature
                                 probs = F.softmax(global_targets_scaled, dim=1)
                             
-                            # 将全局表征输入到模型中获取输出
-                            model_outputs = self.model(global_features_batch, start_layer=True)
-                            
-                            # 应用温度缩放到学生模型的输出
-                            model_outputs_scaled = model_outputs / self.temperature
-                            
-                            # 计算KL散度损失
-                            log_probs = F.log_softmax(model_outputs_scaled, dim=1)
-                            kd_loss = self.kl_loss(log_probs, probs) * (self.temperature ** 2)
+                            # Check if we have enough samples for BatchNorm
+                            if len(global_features_batch) > 1:
+                                # Forward through model starting from mapping layer
+                                model_outputs = self.model(global_features_batch, start_layer=True)
+                                
+                                # Apply temperature scaling to student model output
+                                model_outputs_scaled = model_outputs / self.temperature
+                                
+                                # Calculate KL divergence loss
+                                log_probs = F.log_softmax(model_outputs_scaled, dim=1)
+                                kd_loss = self.kl_loss(log_probs, probs) * (self.temperature ** 2)
+                            else:
+                                # Skip knowledge distillation when we have only one sample
+                                kd_loss = torch.tensor(0.0, device=self.device)
                         else:
                             kd_loss = torch.tensor(0.0, device=self.device)
                     
