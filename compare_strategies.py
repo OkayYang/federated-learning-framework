@@ -2,16 +2,25 @@ import os
 import glob
 import pickle
 import matplotlib.pyplot as plt
+import sys
 
-history_dir="./plots/history/"
+# 检查命令行参数，获取数据集名称
+if len(sys.argv) > 1:
+    dataset = sys.argv[1].lower()
+else:
+    print("请指定数据集名称作为参数")
+    print("用法: python compare_strategies.py [数据集名称]")
+    sys.exit(1)
+
+# 数据集特定的历史记录目录
+history_dir = f"./plots/{dataset}/history/"
 # 确保目录存在
 if not os.path.exists(history_dir):
     print(f"目录 {history_dir} 不存在，请先训练模型并保存历史记录")
     exit()
     
-
 # 保存对比图表的目录
-compare_dir = "./plots/comparison/"
+compare_dir = f"./plots/{dataset}/comparison/"
 os.makedirs(compare_dir, exist_ok=True)
 
 # 搜索所有历史记录文件
@@ -20,18 +29,12 @@ if not history_files:
     print(f"在 {history_dir} 目录中未找到历史记录文件")
     exit()
     
-
 # 加载所有历史记录文件
 strategies_data = {}
 for file_path in history_files:
     # 从文件名中提取策略名称
     filename = os.path.basename(file_path)
-    if filename.startswith("history_"):
-        # 如果文件名格式为 history_{strategy}.pkl
-        strategy_name = filename[8:].split('.')[0]  # 去掉"history_"前缀和".pkl"后缀
-    else:
-        # 如果文件名格式为 {strategy}.pkl
-        strategy_name = filename.split('.')[0]
+    strategy_name = filename.split('_')[0]  # 提取策略名称
     
     try:
         with open(file_path, "rb") as f:
@@ -94,7 +97,7 @@ fig.legend(lines, labels, loc='center right', bbox_to_anchor=(1.0, 0.5), fontsiz
 plt.tight_layout(rect=[0, 0, 0.85, 0.92])  # 上方也留出空间
 
 # 添加整体标题，并提高它的位置以避免重叠
-plt.suptitle("Comparison of Different Federated Learning Strategies", 
+plt.suptitle(f"Comparison of Different Federated Learning Strategies on {dataset.upper()} Dataset", 
              fontsize=16, y=0.98)  # y参数调高标题位置
 
 plt.savefig(f"{compare_dir}/strategies_comparison.png", dpi=300, bbox_inches="tight")

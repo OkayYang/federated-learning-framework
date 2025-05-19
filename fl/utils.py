@@ -17,7 +17,12 @@ def optim_wrapper(func, *args, **kwargs):
     return wrapped_func
 
 
-def plot_global_metrics(history: dict, strategy: str):
+def plot_global_metrics(history: dict, experiment_name: str):
+    # 从experiment_name中提取策略和数据集名称
+    parts = experiment_name.split('_')
+    strategy = parts[0]
+    dataset = parts[1]
+    
     # 绘制全局训练损失、测试准确率和测试损失
     global_history = history["global"]
     epochs = range(1, len(global_history["train_loss"]) + 1)
@@ -53,21 +58,28 @@ def plot_global_metrics(history: dict, strategy: str):
     # 调整布局，显示所有子图
     plt.tight_layout()
     
-    # 创建保存目录
-    os.makedirs("plots", exist_ok=True)
-    plt.savefig(f"plots/fl_global_metrics_{strategy}.png", dpi=300, bbox_inches='tight')
+    # 创建按数据集分类的保存目录
+    plots_dir = f"plots/{dataset}"
+    os.makedirs(plots_dir, exist_ok=True)
+    plt.savefig(f"{plots_dir}/fl_global_metrics_{experiment_name}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 
-def plot_worker_metrics(history: dict, strategy: str):
+def plot_worker_metrics(history: dict, experiment_name: str):
     """
     将所有worker的训练损失、测试准确率和测试损失绘制在同一个图表上
     """
+    # 从experiment_name中提取策略和数据集名称
+    parts = experiment_name.split('_')
+    strategy = parts[0]
+    dataset = parts[1]
+    
     workers_history = history["workers"]
     epochs = range(1, len(next(iter(workers_history.values()))["train_loss"]) + 1)
 
-    # 创建保存目录
-    os.makedirs("plots", exist_ok=True)
+    # 创建按数据集分类的保存目录
+    plots_dir = f"plots/{dataset}"
+    os.makedirs(plots_dir, exist_ok=True)
 
     # 创建一个大的图表，包含三个子图
     plt.figure(figsize=(15, 15))
@@ -124,20 +136,25 @@ def plot_worker_metrics(history: dict, strategy: str):
     plt.tight_layout()
     
     # 保存图表
-    plt.savefig(f"plots/fl_clients_comparison_{strategy}.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{plots_dir}/fl_clients_comparison_{experiment_name}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 
-def plot_client_label_distribution(datasets_dict):
+def plot_client_label_distribution(datasets_dict, dataset_name=None):
     """
     绘制两个图表：
     1. 热图：横坐标是客户端ID，纵坐标是标签，颜色表示每个客户端每个标签的样本数量
     2. 条形图：横坐标是客户端ID，纵坐标是每个客户端的样本总数
     
     :param datasets_dict: 每个客户端的数据字典，包含 'train_dataset' 和 'test_dataset'
+    :param dataset_name: 数据集名称，用于保存到对应文件夹
     """
-    # 创建保存目录
-    os.makedirs("plots", exist_ok=True)
+    # 创建按数据集分类的保存目录
+    if dataset_name:
+        plots_dir = f"plots/{dataset_name}"
+    else:
+        plots_dir = "plots"
+    os.makedirs(plots_dir, exist_ok=True)
     
     # 获取客户端ID列表
     client_ids = list(datasets_dict.keys())
@@ -179,7 +196,7 @@ def plot_client_label_distribution(datasets_dict):
     plt.xlabel('Client ID')
     plt.ylabel('Label')
     plt.tight_layout()
-    plt.savefig("plots/client_label_heatmap.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{plots_dir}/client_label_heatmap.png", dpi=300, bbox_inches='tight')
     plt.show()
     
     # 2. 条形图：显示每个客户端的样本总数
@@ -201,7 +218,7 @@ def plot_client_label_distribution(datasets_dict):
         plt.text(i, count + 0.5, str(int(count)), ha='center')
     
     plt.tight_layout()
-    plt.savefig("plots/client_sample_count.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{plots_dir}/client_sample_count.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 

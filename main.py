@@ -107,7 +107,7 @@ def train_federated_model(args):
 
     # 绘制客户端标签分布
     if args.plot_distribution:
-        plot_client_label_distribution(dataset_dict)
+        plot_client_label_distribution(dataset_dict, args.dataset.lower())
     # 定义损失函数（分类任务使用交叉熵损失）
     loss_fn = nn.CrossEntropyLoss
 
@@ -169,13 +169,15 @@ def train_federated_model(args):
 
     # 绘制全局指标和客户端指标
     # 创建保存目录
-    os.makedirs("./plots/history/", exist_ok=True)
-    
+    dataset_dir = f"./plots/{args.dataset.lower()}"
+    history_dir = f"{dataset_dir}/history"
+    os.makedirs(history_dir, exist_ok=True)
+
     # 保存历史记录
     experiment_name = f"{args.strategy}_{args.dataset}_seed{args.seed}"
-    with open(f"./plots/history/{experiment_name}.pkl", "wb") as f:
+    with open(f"{history_dir}/{experiment_name}.pkl", "wb") as f:
         pickle.dump(history, f)
-        print(f"\n历史记录已保存到: ./plots/history/{experiment_name}.pkl")
+        print(f"\n历史记录已保存到: {history_dir}/{experiment_name}.pkl")
 
     # 绘制客户端指标（各个客户端/工作节点的性能）
     plot_worker_metrics(history, experiment_name)
