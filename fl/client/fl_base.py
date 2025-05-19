@@ -5,7 +5,7 @@
 from abc import ABC, abstractmethod
 import copy
 from typing import Callable
-
+from torch.utils.data import DataLoader
 import numpy as np
 import torch
 from torch import device, nn, optim
@@ -44,13 +44,18 @@ class BaseClient(ABC):
         """
         pass
 
-    def local_evaluate(self):
+    def evaluate(self,test_dataset = None):
         self.model.eval()
         correct = 0
         test_loss = 0
         total = 0
+        if test_dataset is None:
+            test_loader = self.test_loader
+        else:
+            test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
+
         with torch.no_grad():
-            for data, target in self.test_loader:
+            for data, target in test_loader:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
                 test_loss += self.loss(output, target).item()
@@ -58,7 +63,7 @@ class BaseClient(ABC):
                 total += target.size(0)
                 correct += (predicted == target).sum().item()
         accuracy = correct / total
-        return accuracy, test_loss / len(self.test_loader)
+        return accuracy, test_loss / len(test_loader)
 
     def get_weights(self, return_numpy=False):
         if not return_numpy:

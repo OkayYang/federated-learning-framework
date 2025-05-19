@@ -19,7 +19,7 @@ class FeMNISTNet(nn.Module):
         self.fc1 = nn.Linear(16 * 4 * 4, 128)  # 4x4是通过两次2x2的池化层得到的
         self.fc2 = nn.Linear(128, 62)
 
-    def forward(self, x, return_all=False,start_layer=False):
+    def forward(self, x, start_layer=False, return_all=False):
         if start_layer:
             x = self.fc1(x)
             x = self.fc2(F.relu(x))
@@ -48,7 +48,7 @@ class MNISTNet(nn.Module):
         self.fc1 = nn.Linear(64 * 5 * 5, 128)
         self.fc2 = nn.Linear(128, 10)  # 输出10个类别
 
-    def forward(self, x, return_all=False,start_layer=False):
+    def forward(self, x, start_layer=False, return_all=False):
         if start_layer:
             x = self.fc1(x)
             x = self.fc2(F.relu(x))
@@ -120,7 +120,7 @@ class CIFAR10Net(nn.Module):
         # 输出层 - 将隐藏空间映射到类别空间
         self.classifier = nn.Linear(256, 10)  # CIFAR10有10个类别
     
-    def forward(self, x, start_layer=False,return_all=False):
+    def forward(self, x, start_layer=False, return_all=False):
         """
         前向传播函数
         

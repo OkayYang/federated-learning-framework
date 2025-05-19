@@ -306,3 +306,48 @@ def plot_client_label_distribution(datasets_dict, dataset_name=None):
     plt.show()
 
 
+def plot_global_test_metrics(history: dict, experiment_name: str):
+    """
+    绘制在全局测试数据集上的评估结果
+    """
+    # 从experiment_name中提取策略和数据集名称
+    parts = experiment_name.split('_')
+    strategy = parts[0]
+    dataset = parts[1]
+    
+    # 检查是否有全局测试数据
+    if "global_test" not in history:
+        print("没有全局测试数据可供绘图")
+        return
+    
+    global_test = history["global_test"]
+    epochs = range(1, len(global_test["accuracy"]) + 1)
+    
+    plt.figure(figsize=(12, 5))
+    
+    # 绘制全局测试准确率
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, global_test["accuracy"], 'b-o', label="Global Test Accuracy")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.title(f"{strategy} Global Test Accuracy")
+    plt.grid(True)
+    
+    # 绘制全局测试损失
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs, global_test["loss"], 'r-o', label="Global Test Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title(f"{strategy} Global Test Loss")
+    plt.grid(True)
+    
+    # 调整布局
+    plt.tight_layout()
+    
+    # 创建按数据集分类的保存目录
+    plots_dir = f"plots/{dataset}"
+    os.makedirs(plots_dir, exist_ok=True)
+    plt.savefig(f"{plots_dir}/global_test_metrics_{experiment_name}.png", dpi=300, bbox_inches='tight')
+    plt.show()
+
+

@@ -62,6 +62,12 @@ def load_feminist_dataset():
 
     datasets_dict = {}
     client_list = []  # 初始化客户端名称列表
+    
+    # 用于收集全局数据的列表
+    all_train_data = []
+    all_train_labels = []
+    all_test_data = []
+    all_test_labels = []
 
     for user in train_data["users"]:
         user_train_data = train_data["user_data"][user]
@@ -77,6 +83,25 @@ def load_feminist_dataset():
             "test_dataset": test_dataset,
         }
         client_list.append(user)  # 添加用户到客户端列表
+        
+        # 收集全局数据
+        all_train_data.extend(user_train_data["x"])
+        all_train_labels.extend(user_train_data["y"])
+        all_test_data.extend(user_test_data["x"])
+        all_test_labels.extend(user_test_data["y"])
+    
+    # 创建全局数据集
+    global_train_dataset = FemnistDataset(all_train_data, all_train_labels)
+    global_test_dataset = FemnistDataset(all_test_data, all_test_labels)
+    
+    # 将全局数据集添加到字典中
+    datasets_dict["global"] = {
+        "train_dataset": global_train_dataset,
+        "test_dataset": global_test_dataset,
+    }
+    
+    print(f"全局训练数据集大小: {len(global_train_dataset)}")
+    print(f"全局测试数据集大小: {len(global_test_dataset)}")
 
     return client_list, datasets_dict  # 返回客户端列表和数据集字典
 
@@ -502,7 +527,7 @@ def partition_dataset(train_data, train_labels, test_data, test_labels, client_l
         seed: 随机种子
         
     Returns:
-        dict: 客户端数据集字典
+        dict: 客户端数据集字典，包含全局训练和测试数据集
     """
     # 确保数据是numpy数组格式
     if isinstance(train_data, list):
@@ -544,6 +569,16 @@ def partition_dataset(train_data, train_labels, test_data, test_labels, client_l
             "train_dataset": train_dataset,
             "test_dataset": test_dataset,
         }
+    
+    # 添加全局训练和测试数据集
+    global_train_dataset = dataset_class(train_data, train_labels)
+    global_test_dataset = dataset_class(test_data, test_labels)
+    
+    # 将全局数据集添加到字典中
+    datasets_dict["global"] = {
+        "train_dataset": global_train_dataset,
+        "test_dataset": global_test_dataset,
+    }
     
     return datasets_dict
 

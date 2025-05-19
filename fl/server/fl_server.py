@@ -11,7 +11,6 @@ from fl.client.fl_base import ModelConfig
 from fl.client.strategy import create_client
 from fl.server.strategy.strategy_factory import StrategyFactory
 
-
 class FLServer:
     def __init__(
         self,
@@ -42,6 +41,8 @@ class FLServer:
         # 创建聚合策略实例
         self.aggregation_strategy = StrategyFactory.get_strategy(strategy, kwargs)
 
+        #设置全局测试数据集
+        self.global_test_dataset = client_dataset_dict["global"]["test_dataset"]
     def initialize_client_weights(self):
         """设置服务器端的全局模型"""
         clients_weights = []
@@ -50,6 +51,8 @@ class FLServer:
             clients_weights.append(weights)
 
         return average_weight(clients_weights)
+    
+    
 
     def fit(self, comm_rounds, ratio_client=1.0):
         """
@@ -77,7 +80,7 @@ class FLServer:
                 self, selected_workers, round_num, global_weight
             )
             
-            # 评估
+            # 评估选中的客户端
             accuracy_list = []
             test_loss_list = []
             print("\nEvaluating clients...")
@@ -85,13 +88,15 @@ class FLServer:
                 selected_workers.items(), desc="Progress", unit="client"
             ):
                 # 客户端评估并记录数据
-                test_acc, test_loss = worker.local_evaluate()
+                test_acc, test_loss = worker.evaluate(self.global_test_dataset)
 
                 accuracy_list.append(test_acc)
                 test_loss_list.append(test_loss)
 
                 self.history["workers"][client_name]["accuracy"].append(test_acc)
                 self.history["workers"][client_name]["test_loss"].append(test_loss)
+
+            # 在全局测试数据集上评估模型
 
             # 计算当前轮次的全局平均训练损失、准确率和测试损失
             avg_train_loss = sum(train_loss_list) / len(train_loss_list)
