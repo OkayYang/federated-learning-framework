@@ -28,11 +28,7 @@ class FedProx(BaseClient):
         assert l1 == len(w2), "weights should be same in the shape"
         proximal_term = 0
         for i in range(l1):
-            if isinstance(w1[i], np.ndarray):
-                w1_tensor = torch.tensor(w1[i], dtype=torch.float32, device=self.device)
-            else:
-                w1_tensor = w1[i].detach().clone().to(self.device)
-            proximal_term += (w1_tensor - w2[i]).norm(2) ** 2
+            proximal_term += (torch.tensor(w1[i]) - w2[i]).norm(2) ** 2
         return proximal_term
 
     def local_train(self, sync_round: int, weights=None):
@@ -62,10 +58,7 @@ class FedProx(BaseClient):
                     output = self.model(data)  # 前向传播
                     loss = self.loss(output, target)  # 计算损失
                     if weights is not None:
-                        local_weights = []
-                        for param in self.model.parameters():
-                            local_weights.append(param.detach().clone())
-                        proximal_term = self.proximal_term(weights, local_weights)
+                        proximal_term = self.proximal_term(weights, self.get_weights(return_numpy=True))
                         loss += self.mu/2 * proximal_term
                     epoch_loss += loss.item()  # 累加损失
                     loss.backward()  # 反向传播
