@@ -6,8 +6,7 @@ import copy
 import torch
 from tqdm import tqdm
 
-from fl.fl_base import BaseClient
-
+from fl.client.fl_base import BaseClient
 
 class Moon(BaseClient):
     """Moon算法实现"""

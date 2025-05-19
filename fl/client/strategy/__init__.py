@@ -1,0 +1,75 @@
+# -*- coding: utf-8 -*-
+# @Author  : xuxiaoyang
+# @Time    : 2024/11/6 20:30
+# @Describe:
+from torch.utils.data import DataLoader
+
+from fl.client.fl_base import ModelConfig
+from fl.client.strategy.fed_alone import FedAlone
+from fl.client.strategy.fed_avg import FedAvg
+from fl.client.strategy.fed_distill import FedDistill
+from fl.client.strategy.fed_prox import FedProx
+from fl.client.strategy.fed_spd import FedSPD
+from fl.client.strategy.moon import Moon
+from fl.client.strategy.scaffold import Scaffold
+from fl.client.strategy.fedgen import FedGen
+
+# 策略映射字典
+_strategy_map = {
+    "fedalone": FedAlone,
+    "fedavg": FedAvg,
+    "feddistill": FedDistill,
+    "fedprox": FedProx,
+    "fedspd": FedSPD,
+    "moon": Moon,
+    "scaffold": Scaffold,
+    "fedgen": FedGen
+}
+
+def create_client(
+        strategy: str,
+        client_id: str,
+        model_config: ModelConfig,
+        client_dataset_dict,
+        **kwargs
+):
+    """构建模型并返回，自动设置损失函数和优化器"""
+    if model_config.model_fn is None:
+        raise ValueError("Model function is required.")
+    if model_config.loss_fn is None:
+        raise ValueError("Loss function is required.")
+    if model_config.optim_fn is None:
+        raise ValueError("Optimizer function is required.")
+
+    # 创建模型
+    model = model_config.get_model()
+    # 设置损失函数
+    loss = model_config.get_loss_fn()
+    # 设置优化器
+    optimizer = model_config.get_optimizer(model.parameters())
+    epochs = model_config.get_epochs()
+    batch_size = model_config.get_batch_size()
+
+    client_dataset = client_dataset_dict[client_id]
+    train_dataLoader = DataLoader(client_dataset['train_dataset'], batch_size=batch_size, shuffle=True)
+    test_dataLoader = DataLoader(client_dataset['test_dataset'], batch_size=batch_size, shuffle=True)
+
+    strategy = strategy.lower()
+    if strategy not in _strategy_map:
+        raise ValueError(f"Unknown strategy: {strategy}. Available strategies: {list(_strategy_map.keys())}")
+    
+    client_class = _strategy_map[strategy]
+    return client_class(
+        client_id,
+        model,
+        loss,
+        optimizer,
+        epochs,
+        batch_size,
+        train_dataLoader,
+        test_dataLoader,
+        **kwargs
+    )
+
+# 打印可用策略
+print(f"Available strategies: {list(_strategy_map.keys())}")

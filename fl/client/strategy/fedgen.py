@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
-from fl.fl_base import BaseClient
+from fl.client.fl_base import BaseClient
 from fl.model.generator import Generator
 
 class FedGen(BaseClient):

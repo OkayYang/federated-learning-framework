@@ -7,8 +7,7 @@ import numpy as np
 from tqdm import tqdm
 import torch.nn.functional as F
 import torch.nn as nn
-from fl.fl_base import BaseClient
-
+from fl.client.fl_base import BaseClient
 
 class FedSPD(BaseClient):
     def __init__(self, *args, **kwargs):

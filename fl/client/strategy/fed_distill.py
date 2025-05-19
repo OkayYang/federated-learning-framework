@@ -6,8 +6,7 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-import numpy as np
-from fl.fl_base import BaseClient
+from fl.client.fl_base import BaseClient
 import torch.nn as nn
 
 class FedDistill(BaseClient):

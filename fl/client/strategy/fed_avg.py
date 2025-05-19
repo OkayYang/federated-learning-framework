@@ -1,31 +1,34 @@
 # -*- coding: utf-8 -*-
 # @Author  : xuxiaoyang
-# @Time    : 2024/11/7 11:07
+# @Time    : 2024/11/6 20:30
 # @Describe:
 import torch
 from tqdm import tqdm
 
-from fl.fl_base import BaseClient
+from fl.client.fl_base import BaseClient
 
-
-class FedAlone(BaseClient):
-    """
-    联邦学习算法：FedAlone, 联邦学习算法中，每个客户端独立训练，不进行互相通信
-    """
-
-    def local_train(self, sync_round: int):
+class FedAvg(BaseClient):
+    """FedAvg算法实现"""
+    
+    def local_train(self, sync_round: int, weights=None):
         """
         训练方法，根据当前通信轮次(sync_round)进行相应的训练更新
+        :param weights: 服务器传递过来的模型权重
         :param sync_round: 当前的通信轮次
         """
-        # 开始本地训练
+        # 1. 加载服务器传来的全局模型权重
+        if weights is not None:
+            self.update_weights(weights)
+
+        # 2. 开始本地训练
         self.model.train()
         total_loss = 0
         num_sample = len(self.train_loader.dataset)
         total_batches = len(self.train_loader) * self.epochs
+        
         with tqdm(
             total=total_batches,
-            desc=f"Client {self.client_id} Training Progress (FedAlone)"
+            desc=f"Client {self.client_id} Training Progress (FedAvg)"
         ) as pbar:
             for epoch in range(self.epochs):  # 多轮本地训练
                 epoch_loss = 0
@@ -47,7 +50,10 @@ class FedAlone(BaseClient):
                     'epoch': f"{epoch+1}/{self.epochs}",
                     'loss': f"{avg_loss:.4f}"
                 })
+                
+        # 3. 获取训练后的权重
+        model_weights = self.get_weights(return_numpy=True)
 
-        # 返回更新后的权重给服务器，同时返回样本数和平均损失
+        # 4. 返回更新后的权重给服务器，同时返回样本数和平均损失
         avg_loss = total_loss / (len(self.train_loader) * self.epochs)
-        return  avg_loss
+        return model_weights, num_sample, avg_loss

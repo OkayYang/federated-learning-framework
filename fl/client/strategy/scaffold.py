@@ -7,8 +7,7 @@ import torch
 from tqdm import tqdm
 import numpy as np
 
-from fl.fl_base import BaseClient
-
+from fl.client.fl_base import BaseClient
 
 class Scaffold(BaseClient):
     def __init__(self, *args, **kwargs):

@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 # @Author  : xuxiaoyang
-# @Time    : 2025/5/12 11:07
+# @Time    : 2024/11/6 20:30
 # @Describe:
 import torch
 from tqdm import tqdm
 import numpy as np
 
-from fl.fl_base import BaseClient
-
+from fl.client.fl_base import BaseClient
 
 class FedProx(BaseClient):
     """FedProx算法实现"""
+    # 自定义策略名
+    _strategy_name_ = "fedprox"
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.mu = kwargs.get('mu', 0.01)

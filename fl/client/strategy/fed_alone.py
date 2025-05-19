@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 # @Author  : xuxiaoyang
-# @Time    : 2024/11/7 11:07
+# @Time    : 2024/11/6 20:30
 # @Describe:
 import torch
 from tqdm import tqdm
 
-from fl.fl_base import BaseClient
+from fl.client.fl_base import BaseClient
 
-
-class FedAvg(BaseClient):
-
+class FedAlone(BaseClient):
+    """FedAlone算法实现"""
+    
     def local_train(self, sync_round: int, weights=None):
         """
         训练方法，根据当前通信轮次(sync_round)进行相应的训练更新
@@ -17,8 +17,8 @@ class FedAvg(BaseClient):
         :param sync_round: 当前的通信轮次
         """
         # 1. 加载服务器传来的全局模型权重
-        if weights is not None:
-            self.update_weights(weights)
+        # if weights is not None:
+        #     self.update_weights(weights)
 
         # 3. 开始本地训练
         self.model.train()
@@ -27,7 +27,7 @@ class FedAvg(BaseClient):
         total_batches = len(self.train_loader) * self.epochs
         with tqdm(
             total=total_batches,
-            desc=f"Client {self.client_id} Training Progress (FedAvg)"
+            desc=f"Client {self.client_id} Training Progress (FedAlone)"
         ) as pbar:
             for epoch in range(self.epochs):  # 多轮本地训练
                 epoch_loss = 0

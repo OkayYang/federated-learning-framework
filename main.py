@@ -15,8 +15,8 @@ import pickle
 from fl.data import datasets
 
 # 导入必要的库和模块
-from fl.fl_base import ModelConfig
-from fl.fl_server import FLServer
+from fl.client.fl_base import ModelConfig
+from fl.server.fl_server import FLServer
 from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet
 from fl.model.generator import Generator
 from fl.utils import (

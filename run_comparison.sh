@@ -31,8 +31,8 @@ echo "选择的数据集: $DATASET"
 
 # 设置基本参数
 BATCH_SIZE=64    # 批处理大小
-LOCAL_EPOCHS=3  # 本地训练轮数
-COMM_ROUNDS=3  # 通信轮数
+LOCAL_EPOCHS=20  # 本地训练轮数
+COMM_ROUNDS=30  # 通信轮数
 LEARNING_RATE=0.01  # 学习率
 OPTIMIZER="adam"    # 优化器: adam, sgd
 SEED=42             # 随机种子，保证实验可重复性
