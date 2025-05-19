@@ -4,3 +4,4 @@ numpy~=1.26.4
 requests~=2.32.3
 tqdm~=4.67.0
 matplotlib~=3.9.2
+seaborn~=0.13.2

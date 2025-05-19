@@ -31,8 +31,9 @@ echo "选择的数据集: $DATASET"
 
 # 设置基本参数
 BATCH_SIZE=64    # 批处理大小
-LOCAL_EPOCHS=20  # 本地训练轮数
+LOCAL_EPOCHS=10  # 本地训练轮数
 COMM_ROUNDS=30  # 通信轮数
+RATIO_CLIENT=0.8  # 每轮参与训练的客户端比例
 LEARNING_RATE=0.01  # 学习率
 OPTIMIZER="adam"    # 优化器: adam, sgd
 SEED=42             # 随机种子，保证实验可重复性
@@ -54,6 +55,7 @@ LOG_FILE="${LOG_DIR}/experiment_$(date +%Y%m%d_%H%M%S).log"
     echo "批处理大小: $BATCH_SIZE"
     echo "本地训练轮数: $LOCAL_EPOCHS"
     echo "通信轮数: $COMM_ROUNDS"
+    echo "每轮参与训练的客户端比例: $RATIO_CLIENT"
     echo "学习率: $LEARNING_RATE"
     echo "优化器: $OPTIMIZER"
     echo "随机种子: $SEED"
@@ -82,6 +84,7 @@ python main.py \
     --batch_size $BATCH_SIZE \
     --local_epochs $LOCAL_EPOCHS \
     --comm_rounds $COMM_ROUNDS \
+    --ratio_client $RATIO_CLIENT \
     --lr $LEARNING_RATE \
     --optimizer $OPTIMIZER \
     --seed $SEED \
@@ -104,6 +107,7 @@ python main.py \
     --batch_size $BATCH_SIZE \
     --local_epochs $LOCAL_EPOCHS \
     --comm_rounds $COMM_ROUNDS \
+    --ratio_client $RATIO_CLIENT \
     --lr $LEARNING_RATE \
     --optimizer $OPTIMIZER \
     --seed $SEED \
@@ -127,6 +131,7 @@ python main.py \
     --batch_size $BATCH_SIZE \
     --local_epochs $LOCAL_EPOCHS \
     --comm_rounds $COMM_ROUNDS \
+    --ratio_client $RATIO_CLIENT \
     --lr $LEARNING_RATE \
     --optimizer $OPTIMIZER \
     --seed $SEED \
@@ -149,6 +154,7 @@ python main.py \
     --batch_size $BATCH_SIZE \
     --local_epochs $LOCAL_EPOCHS \
     --comm_rounds $COMM_ROUNDS \
+    --ratio_client $RATIO_CLIENT \
     --lr $LEARNING_RATE \
     --optimizer $OPTIMIZER \
     --seed $SEED \
@@ -171,6 +177,7 @@ python main.py \
     --batch_size $BATCH_SIZE \
     --local_epochs $LOCAL_EPOCHS \
     --comm_rounds $COMM_ROUNDS \
+    --ratio_client $RATIO_CLIENT \
     --lr $LEARNING_RATE \
     --optimizer $OPTIMIZER \
     --seed $SEED \
@@ -193,6 +200,7 @@ python main.py \
     --batch_size $BATCH_SIZE \
     --local_epochs $LOCAL_EPOCHS \
     --comm_rounds $COMM_ROUNDS \
+    --ratio_client $RATIO_CLIENT \
     --lr $LEARNING_RATE \
     --optimizer $OPTIMIZER \
     --seed $SEED \
@@ -216,6 +224,7 @@ python main.py \
     --batch_size $BATCH_SIZE \
     --local_epochs $LOCAL_EPOCHS \
     --comm_rounds $COMM_ROUNDS \
+    --ratio_client $RATIO_CLIENT \
     --lr $LEARNING_RATE \
     --optimizer $OPTIMIZER \
     --seed $SEED \
@@ -239,6 +248,7 @@ python main.py \
     --batch_size $BATCH_SIZE \
     --local_epochs $LOCAL_EPOCHS \
     --comm_rounds $COMM_ROUNDS \
+    --ratio_client $RATIO_CLIENT \
     --lr $LEARNING_RATE \
     --optimizer $OPTIMIZER \
     --seed $SEED \
