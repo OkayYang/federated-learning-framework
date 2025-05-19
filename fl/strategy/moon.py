@@ -13,8 +13,8 @@ class Moon(BaseClient):
     """Moon算法实现"""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.mu = kwargs['mu']
-        self.temperature = kwargs['temperature']  # 从kwargs中获取temperature参数
+        self.mu = kwargs.get('mu', 1)
+        self.temperature = kwargs.get('temperature', 2.0)  # 从kwargs中获取temperature参数
         self.cosine_similarity_fn = torch.nn.CosineSimilarity(dim=-1)
         # 设置MOON特定参数
         self.buffer_size = 1
@@ -59,12 +59,14 @@ class Moon(BaseClient):
                     # 对比损失计算
                     contrastive_loss = 0
                     # 获取全局模型的中间表示
-                    _, pro2, _ = self.global_model(data, return_all=True)
+                    with torch.no_grad():
+                        _, pro2, _ = self.global_model(data, return_all=True)
                     posi = self.cosine_similarity_fn(pro1, pro2)
                     logits = posi.reshape(-1, 1)
                     # 计算与历史模型的表示相似度（负样本）
                     for prev_model in self.prev_model_list:
-                        _, pro3, _ = prev_model(data, return_all=True)
+                        with torch.no_grad():
+                            _, pro3, _ = prev_model(data, return_all=True)
                         nega = self.cosine_similarity_fn(pro1, pro3)
                         logits = torch.cat((logits,nega.reshape(-1,1)), dim=1)
                     logits = logits / self.temperature
@@ -74,6 +76,7 @@ class Moon(BaseClient):
                     # 合并损失
                     loss = original_loss + contrastive_loss
                     loss.backward()  # 反向传播
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     self.optimizer.step()  # 更新模型参数
                     epoch_loss += loss.item()  # 累加损失
                     epoch_contrastive_loss += contrastive_loss.item()
@@ -104,5 +107,4 @@ class Moon(BaseClient):
             self.prev_model_list.pop(0)
         # 5. 返回更新后的权重给服务器，同时返回样本数和平均损失
         avg_loss = total_loss / (len(self.train_loader) * self.epochs)
-        # print(f'客户端:{self.client_id} 第{sync_round}轮通信:Training Loss: {avg_loss}')
         return model_weights, num_sample, avg_loss

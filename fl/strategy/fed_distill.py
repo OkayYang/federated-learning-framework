@@ -13,20 +13,20 @@ import torch.nn as nn
 class FedDistill(BaseClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Get number of classes from the model's output layer
+        # 获取模型输出层的类别数量
         self.num_classes = kwargs.get('num_classes')
         if self.num_classes is None:
             raise ValueError("num_classes must be provided")
         
-        # Initialize logit storage for knowledge distillation
-        self.logit_storage = {}  # Store averaged logits for each class
-        self.logit_counts = {}   # Count samples per class
-        self.global_logits = {}  # Store global ensemble logits
+        # 初始化logit存储用于知识蒸馏
+        self.logit_storage = {}  # 存储每个类的平均logits
+        self.logit_counts = {}   # 存储每个类的样本数量
+        self.global_logits = {}  # 存储全局集成logits
         self.kl_div = nn.KLDivLoss(reduction='batchmean')
         
-        # Distillation hyperparameters
-        self.gamma = kwargs.get('gamma', 0.5)  # Weight for distillation loss
-        self.temperature = kwargs.get('temperature', 2.0)  # Temperature for softening probability distributions
+        # 蒸馏超参数
+        self.gamma = kwargs.get('gamma', 0.5)  # 蒸馏损失的权重
+        self.temperature = kwargs.get('temperature', 2.0)  # 温度用于软化概率分布
         
         # Initialize storage for each class
         for l in range(self.num_classes):
@@ -34,19 +34,19 @@ class FedDistill(BaseClient):
             self.logit_counts[l] = 0
             self.global_logits[l] = torch.zeros(self.num_classes)
 
-    def _compute_distillation_loss(self, student_logits, teacher_logits, temperature=2.0):
+    def _compute_distillation_loss(self, student_logits, teacher_logits):
         
         
         # 应用温度缩放
-        soft_targets = F.softmax(teacher_logits / temperature, dim=-1)
-        student_log_softmax = F.log_softmax(student_logits / temperature, dim=-1)
+        soft_targets = F.softmax(teacher_logits / self.temperature, dim=-1)
+        student_log_softmax = F.log_softmax(student_logits / self.temperature, dim=-1)
         
         # 计算 KL 散度损失并应用温度平方
-        return self.kl_div(student_log_softmax, soft_targets) * (temperature ** 2)
+        return self.kl_div(student_log_softmax, soft_targets) * (self.temperature ** 2)
 
     def local_train(self, sync_round: int, weights=None, global_logits=None):
         """
-        Local training with federated distillation
+        联邦学习算法：FedDistill, 联邦学习算法中，每个客户端独立训练，不进行互相通信
         """
         # 1. 更新模型权重(这里可以保持原论文一致不更新)
         if weights is not None:
@@ -88,11 +88,7 @@ class FedDistill(BaseClient):
                     if global_logits is not None:
                         # 获取当前样本的教师logits
                         teacher_logits = torch.stack([self.global_logits[t.item()] for t in target])
-                        distill_loss = self._compute_distillation_loss(
-                            logits, 
-                            teacher_logits, 
-                            self.temperature
-                        )
+                        distill_loss = self._compute_distillation_loss(logits, teacher_logits)
                         kd_loss += distill_loss.item()
                         ce_loss += ce_loss.item()
                         # 联合损失
@@ -102,6 +98,7 @@ class FedDistill(BaseClient):
                     
                     # 反向传播和优化
                     loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     self.optimizer.step()
                     
                     # 更新logit存储

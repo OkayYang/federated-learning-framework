@@ -18,7 +18,6 @@ class Scaffold(BaseClient):
         for param in self.model.parameters():
             self.c.append(torch.zeros_like(param))
             self.cg.append(torch.zeros_like(param))
-        # 从kwargs中获取学习率，如果没有提供则使用默认值
         self.eta_l = kwargs.get('lr', 0.01)
         self.global_model = copy.deepcopy(self.model)  # 全局模型副本
         
@@ -33,10 +32,10 @@ class Scaffold(BaseClient):
         if weights is not None:
             self.update_weights(weights)
             self.global_model.load_state_dict(self.model.state_dict())
-            # 设置全局模型为评估模式
-            self.global_model.eval()
             for param in self.global_model.parameters():
                 param.requires_grad = False
+        
+        # 确保cg不会记录梯度
         if cg is not None:
             for i, c in enumerate(cg):
                 if isinstance(c, torch.Tensor):
@@ -44,8 +43,9 @@ class Scaffold(BaseClient):
                 else:
                     self.cg[i] = torch.tensor(c)
         
-        # 保存初始模型参数，用于后续计算控制变量
-        
+        # 确保c不会记录梯度
+        for i in range(len(self.c)):
+            self.c[i] = self.c[i].detach()
 
         # 3. 开始本地训练
         self.model.train()
@@ -66,14 +66,12 @@ class Scaffold(BaseClient):
                     loss.backward()  # 反向传播，计算梯度
                     
                     # 手动更新参数，按照公式 y_i ← y_i - η_l(g_i(y_i) - c_i + c)
-                    with torch.no_grad():  # 在无梯度跟踪的上下文中更新参数
-                        for i, param in enumerate(self.model.parameters()):
-                            if param.grad is not None:
-                                # 计算修正后的梯度：g_i(y_i) - c_i + c
-                                corrected_grad = param.grad - self.c[i] + self.cg[i]
-                                # 应用梯度更新：y_i ← y_i - η_l * corrected_grad
-                                param.data.add_(-self.eta_l * corrected_grad)
-                    
+                    # 修改梯度：g_i ← g_i - c_i + c
+                    for i, param in enumerate(self.model.parameters()):
+                        if param.grad is not None:
+                            param.grad = param.grad - self.c[i] + self.cg[i]
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    self.optimizer.step()
                     # 更新进度条
                     pbar.update(1)
                 total_loss += epoch_loss
@@ -90,14 +88,15 @@ class Scaffold(BaseClient):
         local_params = list(self.model.parameters())
         
         # 更新本地控制变量
-        for i, (global_param, local_param) in enumerate(zip(global_params, local_params)):
-            # 计算参数差: (x - y_i)
-            param_diff = global_param.data - local_param.data
-            
-            # 按论文公式: c_i ← c_i − c + 1/(Kηl) * (x − y_i)
-            # K是本地迭代次数，ηl是学习率
-            update_term = param_diff / (self.eta_l * total_batches)
-            self.c[i] = self.c[i] - self.cg[i] + update_term
+        with torch.no_grad():
+            for i, (global_param, local_param) in enumerate(zip(global_params, local_params)):
+                # 计算参数差: (x - y_i)
+                param_diff = global_param.data - local_param.data
+                
+                # 按论文公式: c_i ← c_i − c + 1/(Kηl) * (x − y_i)
+                # K是本地迭代次数，ηl是学习率
+                update_term = param_diff / (self.eta_l * total_batches)
+                self.c[i] = self.c[i].detach() - self.cg[i].detach() + update_term
         
         # 计算当前本地控制变量的副本（用于返回给服务器）
         c_current = [c.clone().detach() for c in self.c]

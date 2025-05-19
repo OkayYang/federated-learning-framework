@@ -9,36 +9,36 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
 from fl.fl_base import BaseClient
-from fl.model.model import Generator
+from fl.model.generator import Generator
 
 class FedGen(BaseClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # 获取模型最后一层的输入维度作为特征维度
         self.feature_dim = kwargs.get('feature_dim')
         self.num_classes = kwargs.get('num_classes')  
+        self.latent_dim = kwargs.get('latent_dim')
+        self.hidden_dim = kwargs.get('hidden_dim')
         if self.num_classes is None or self.feature_dim is None:
             raise ValueError("num_classes and feature_dim must be provided")
         
         
         # 生成器超参数
-        self.latent_dim = kwargs.get('latent_dim', 64)
-        self.hidden_dim = kwargs.get('hidden_dim', 256)
         self.alpha = kwargs.get('alpha', 10)  # 知识蒸馏损失的权重
         self.beta = kwargs.get('beta', 10)   # 生成器损失的权重
-        
+        self.temperature = kwargs.get('temperature', 2.0)  # 温度用于软化概率分布
+        self.init_generator = self.kwargs.get('generator_model')
         # 初始化生成器
         self.generator = Generator(
-            latent_dim=self.latent_dim,
             feature_dim=self.feature_dim,
-            hidden_dim=self.hidden_dim,
-            num_classes=self.num_classes
+            num_classes=self.num_classes,
+            latent_dim=self.latent_dim,
+            hidden_dim=self.hidden_dim
         )
-        
+        self.generator.update_weights(self.init_generator.get_weights(return_numpy=True))
+
         # 初始化KL散度损失函数，使用batchmean模式避免警告
-        self.kl_loss = nn.KLDivLoss(reduction='batchmean')
-        
+        self.kl_div = nn.KLDivLoss(reduction='batchmean')        
         # 统计标签
         self.label_count = {}
         for data, target in self.train_loader:
@@ -52,6 +52,13 @@ class FedGen(BaseClient):
         """Decay learning rate by a factor of 0.95 every lr_decay_epoch epochs."""
         lr = max(1e-4, init_lr * (decay ** (epoch // lr_decay_epoch)))
         return lr
+    def _compute_distillation_loss(self, student_logits, teacher_logits):
+                # 计算 softmax 和 log_softmax
+        student_log_softmax = F.log_softmax(student_logits, dim=-1)
+        soft_targets=F.softmax(teacher_logits, dim=-1).clone().detach()
+        
+        # 计算 KL 散度并应用温度平方调整梯度
+        return self.kl_div(student_log_softmax, soft_targets)
      
     def local_train(self, sync_round: int, weights=None, generator_weights=None):
         """
@@ -81,8 +88,8 @@ class FedGen(BaseClient):
                 epoch_loss = 0
                 epoch_teacher_loss = 0
                 epoch_kd_loss = 0
-                alpha = self._exp_lr_scheduler(sync_round*self.epochs + epoch, decay=0.98, init_lr=self.alpha)
-                beta = self._exp_lr_scheduler(sync_round*self.epochs + epoch, decay=0.98, init_lr=self.beta)
+                alpha = self._exp_lr_scheduler(sync_round, decay=0.98, init_lr=self.alpha)
+                beta = self._exp_lr_scheduler(sync_round, decay=0.98, init_lr=self.beta)
                 # 本地真实数据训练
                 for data, target in self.train_loader:
                     self.optimizer.zero_grad()
@@ -98,22 +105,23 @@ class FedGen(BaseClient):
                     # 生成噪声
                     z = torch.randn(batch_size, self.latent_dim)
                     # 生成特征
-                    gen_features = self.generator(z, y_input)
+                    with torch.no_grad():  # ❗必须要这个
+                        gen_features = self.generator(z, target)
                     
                     # 通过模型的分类层计算生成特征的预测
                     gen_logits = self.model(gen_features,start_layer=True)
                     
                     # 计算知识蒸馏损失
-                    kd_loss = self._compute_kd_loss(gen_logits, y_input)
+                    kd_loss = self._compute_distillation_loss(logits, gen_logits)
                     
                     # 随机生成样本
                     sampled_labels = np.random.choice(
                         self.num_classes, batch_size
                     )
                     sampled_labels = torch.LongTensor(sampled_labels)
-                    sampled_features = self.generator(z, sampled_labels)
+                    with torch.no_grad():  # ❗必须要这个
+                        sampled_features = self.generator(z, sampled_labels)
                     sampled_logits = self.model(sampled_features,start_layer=True)
-                    
                     # 计算生成样本的分类损失
                     teacher_loss = self.loss(sampled_logits, sampled_labels)
                     
@@ -122,6 +130,7 @@ class FedGen(BaseClient):
                     
                     # 反向传播和优化
                     loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     self.optimizer.step()
                     
                     epoch_loss += loss.item()
@@ -149,34 +158,5 @@ class FedGen(BaseClient):
         return model_weights, num_sample, avg_loss,self.label_count
     
     
-    def _compute_kd_loss(self, logits, labels, temperature=1.0):
-        """
-        计算知识蒸馏损失 - 从logits和标签
-        
-        Args:
-            logits: 模型预测的logits
-            labels: 目标标签（硬标签）
-            temperature: 温度参数，控制软标签的平滑程度
-            
-        Returns:
-            知识蒸馏损失
-        """
-        # 将硬标签转换为one-hot编码
-        one_hot = torch.zeros_like(logits)
-        one_hot.scatter_(1, labels.unsqueeze(1), 1)
-        
-        # 创建软目标 - 使用one-hot作为基础，但增加平滑度
-        # 可以调整平滑度，这里使用0.1作为非目标类的概率
-        smoothing = 0.1
-        num_classes = logits.size(1)
-        smooth_targets = one_hot * (1 - smoothing) + smoothing / num_classes
-        
-        # 应用温度缩放到学生logits
-        student_log_softmax = F.log_softmax(logits / temperature, dim=1)
-        
-        # 使用KLDivLoss计算知识蒸馏损失
-        kd_loss = self.kl_loss(student_log_softmax, smooth_targets)
-        
-        # 应用温度平方调整梯度
-        return kd_loss * (temperature ** 2)
+   
     

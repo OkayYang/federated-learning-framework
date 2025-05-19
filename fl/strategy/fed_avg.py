@@ -37,6 +37,7 @@ class FedAvg(BaseClient):
                     loss = self.loss(output, target)  # 计算损失
                     epoch_loss += loss.item()  # 累加损失
                     loss.backward()  # 反向传播
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     self.optimizer.step()  # 更新模型参数
 
                     # 更新进度条
@@ -52,5 +53,4 @@ class FedAvg(BaseClient):
 
         # 5. 返回更新后的权重给服务器，同时返回样本数和平均损失
         avg_loss = total_loss / (len(self.train_loader) * self.epochs)
-        # print(f'客户端:{self.client_id} 第{sync_round}轮通信:Training Loss: {avg_loss}')
         return model_weights, num_sample, avg_loss

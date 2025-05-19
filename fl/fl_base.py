@@ -3,6 +3,7 @@
 # @Time    : 2024/11/6 20:31
 # @Describe:
 from abc import ABC, abstractmethod
+import copy
 from typing import Callable
 
 import numpy as np
@@ -83,6 +84,12 @@ class BaseClient(ABC):
             grad = None if p.grad is None else p.grad.data.cpu().numpy()
             grads.append(grad)
         return [g.copy() for g in grads]
+    
+    #获取模型副本
+    def get_model_copy(self):
+        model_copy = copy.deepcopy(self.model)
+        model_copy.eval()
+        return model_copy
 
 
 class ModelConfig:

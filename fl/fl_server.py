@@ -23,10 +23,12 @@ class FLServer:
         strategy,
         model_config: ModelConfig,
         client_dataset_dict,
+        seed,
         **kwargs,
     ):
         self.strategy = strategy  # 联邦学习策略（例如 FedAvg, FedProx）
         self.model_config = model_config  # 服务器的全局模型
+        self.seed = seed # 随机种子
         self._workers = {
             client: create_client(strategy, client, model_config, client_dataset_dict, **kwargs)
             for client in client_list
@@ -61,7 +63,7 @@ class FLServer:
         # 初始化SCAFFOLD全局控制变量
         global_c = None
         global_logits = None
-        
+        global_class_reps = None
         if self.global_generator is not None:
             global_generator_weights = self.global_generator.get_weights(return_numpy=True)
         else:
@@ -101,6 +103,12 @@ class FLServer:
                 global_weight, train_loss_list, global_logits, global_generator_weights = self.fit_fedgen(
                     selected_workers, round_num, global_weight, global_logits, global_generator_weights
                 )
+            elif self.strategy == "fedspd":
+                global_weight, train_loss_list, global_class_reps, global_logits = self.fit_fedspd(
+                    selected_workers, round_num, global_weight, global_class_reps, global_logits
+                )
+            elif self.strategy == "fedalone":
+                train_loss_list = self.fit_fedalone(selected_workers, round_num)
             else:
                 raise ValueError(f"Unknown strategy: {self.strategy}")
             
@@ -139,6 +147,78 @@ class FLServer:
 
 
         return self.history
+    def fit_fedalone(self, selected_workers,round_num):
+        train_loss_list = []
+        for client_name, worker in selected_workers.items():
+            train_loss = worker.local_train(sync_round=round_num)
+            train_loss_list.append(train_loss)
+            self.history["workers"][client_name]["train_loss"].append(train_loss)
+        return train_loss_list
+    def fit_fedspd(self, selected_workers, round_num, global_weight, global_class_reps=None, global_logits=None):
+        """
+        FedSPD服务器聚合方法 - 类别感知蒸馏机制
+        简化版实现，专注于有效的知识迁移
+        """
+        client_weight_list = []
+        sample_num_list = []
+        train_loss_list = []
+        client_class_reps = []  # 收集客户端的类别表征
+        client_class_logits = []  # 收集客户端的类别logits
+        
+        # 1. 客户端训练
+        for client_name, worker in selected_workers.items():
+            client_weight, sample_num, train_loss, class_reps, class_logits = worker.local_train(
+                sync_round=round_num,
+                weights=None, # 传递全局模型权重
+                global_reps=global_class_reps,
+                global_logits=global_logits
+            )
+            
+            client_weight_list.append(client_weight)
+            sample_num_list.append(sample_num)
+            train_loss_list.append(train_loss)
+            client_class_reps.append(class_reps)
+            client_class_logits.append(class_logits)
+            
+            self.history["workers"][client_name]["train_loss"].append(train_loss)
+        
+        # 2. 聚合模型权重 (FedAvg方式)
+        global_weight = average_weight(client_weight_list, sample_num_list)
+        
+        # 3. 聚合类别表征和logits (简单平均)
+        # 初始化全局类别表征和logits字典
+        all_class_reps = {}
+        all_class_logits = {}
+        
+        # 收集所有客户端的表征和logits
+        for client_rep, client_logit in zip(client_class_reps, client_class_logits):
+            for class_id, rep in client_rep.items():
+                if class_id not in all_class_reps:
+                    all_class_reps[class_id] = []
+                all_class_reps[class_id].append(rep)
+                
+            for class_id, logit in client_logit.items():
+                if class_id not in all_class_logits:
+                    all_class_logits[class_id] = []
+                all_class_logits[class_id].append(logit)
+        
+        # 计算每个类别的全局平均表征和logits
+        global_class_reps = {}
+        global_logits = {}
+        
+        # 对每个类别进行简单平均
+        for class_id, reps in all_class_reps.items():
+            if reps:
+                global_class_reps[class_id] = np.mean(np.array(reps), axis=0)
+                
+        for class_id, logits in all_class_logits.items():
+            if logits:
+                global_logits[class_id] = np.mean(np.array(logits), axis=0)
+        
+        # 打印信息
+        print(f"FedSPD 第{round_num}轮: 聚合了{len(global_class_reps)}个类别的知识")
+        
+        return global_weight, train_loss_list, global_class_reps, global_logits
     def fit_scaffold(self, selected_workers,round_num, global_weight, global_c):
         client_weight_list = []
         client_c_list = []  # 客户端的控制变量
@@ -216,7 +296,7 @@ class FLServer:
                 weights=None,
                 generator_weights=global_generator
             )
-            client_model_list.append(worker.model)  # 这里仅仅是本地实验，实际中要参数传递
+            client_model_list.append(worker.get_model_copy())  # 这里仅仅是本地实验，实际中要参数传递
             client_weight_list.append(client_weight)
             sample_num_list.append(sample_num)
             train_loss_list.append(train_loss)
@@ -227,10 +307,7 @@ class FLServer:
         # 3. 生成器模型训练配置
         # 3.1 标签权重
         label_weights = []
-        total_loss = 0
-        total_teacher_loss = 0
         total_student_loss = 0
-        total_diversity_loss = 0
         # Compute the weight of each label across all workers
         for label in range(self.global_generator.num_classes):
             # Get the count of this label from each worker
@@ -245,6 +322,7 @@ class FLServer:
 
         # 3.2 生成器模型训练
         self.global_generator.train()
+        total_loss = 0
         for i in range(self.global_generator.train_epochs):
             self.global_generator.optimizer.zero_grad()
             # 随机生成标签
@@ -279,8 +357,8 @@ class FLServer:
                     dtype=torch.float32,
                 )
                 expand_weight = np.tile(weight.cpu().numpy(), (1, self.global_generator.num_classes))
-
-                teacher_logits = client_model_list[idx](synthetic_features,start_layer=True)
+                with torch.no_grad():
+                    teacher_logits = client_model_list[idx](synthetic_features,start_layer=True)
 
                 # Calculate the weighted teacher loss for each worker
                 teacher_loss_ = torch.mean(
@@ -295,13 +373,16 @@ class FLServer:
 
             # 全局模型当学生,参与方模型logit平均当老师，这里没有维护全局模型，就假装第一个参与方模型
             global_model = copy.deepcopy(client_model_list[0])
+            
             # 更新全局模型参数
             keys = global_model.state_dict().keys()
             weights_dict = {}
             for k, v in zip(keys, global_weight):
                 weights_dict[k] = torch.Tensor(np.copy(v))
             global_model.load_state_dict(weights_dict)
-            student_output = global_model(synthetic_features,start_layer=True)
+            global_model.eval()
+            with torch.no_grad():
+                student_output = global_model(synthetic_features,start_layer=True).clone().detach()
             student_loss = F.kl_div(
                 F.log_softmax(student_output, dim=1), F.softmax(teacher_logit, dim=1), reduction='batchmean'
             )
@@ -320,6 +401,8 @@ class FLServer:
                 )
             loss.backward()
             self.global_generator.optimizer.step()
+            total_loss += loss.item()
+        print(f"FedGen 第{round_num}轮: 生成器模型训练第{i+1}轮, 总损失: {total_loss:.4f}")
         return global_weight, train_loss_list, global_logits, self.global_generator.get_weights(return_numpy=True)
     def fit_fedavg(self, selected_workers,round_num, global_weight):
         return self.fit_common(selected_workers,round_num, global_weight)

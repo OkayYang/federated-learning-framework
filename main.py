@@ -17,7 +17,8 @@ from fl.data import datasets
 # 导入必要的库和模块
 from fl.fl_base import ModelConfig
 from fl.fl_server import FLServer
-from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, Generator, MNISTNet
+from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet
+from fl.model.generator import Generator
 from fl.utils import (
     optim_wrapper,
     plot_client_label_distribution,
@@ -36,7 +37,7 @@ def setup_seed(seed):
         torch.backends.cudnn.benchmark = False
     print(f"随机种子已设置为: {seed}")
 
-def setup_and_train_federated_model(args):
+def train_federated_model(args):
     """
     设置联邦学习系统，训练模型并绘制结果。
 
@@ -59,21 +60,31 @@ def setup_and_train_federated_model(args):
             torch.cuda.manual_seed_all(args.seed)
     
     # 根据指定的数据集加载数据
+    num_classes = -1
+    feature_dim = -1 # 生成器生成的特征纬度，根据不同的网络模型不同
     if args.dataset.lower() == 'femnist':
         client_list, dataset_dict = datasets.load_feminist_dataset()
         model_fn = FeMNISTNet
+        num_classes = 62
+        feature_dim = 16 * 4 * 4
     elif args.dataset.lower() == 'mnist':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_mnist_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
         model_fn = MNISTNet
+        num_classes = 10
+        feature_dim = 64 * 5 * 5
     elif args.dataset.lower() == 'cifar10':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar10_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
         model_fn = CIFAR10Net
+        num_classes = 10
+        feature_dim = 128 * 4 * 4
     elif args.dataset.lower() == 'cifar100':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar100_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
         model_fn = CIFAR100Net
+        num_classes = 100
+        feature_dim = 256 * 4 * 4
     else:
         raise ValueError(f"不支持的数据集: {args.dataset}")
     
@@ -111,47 +122,20 @@ def setup_and_train_federated_model(args):
 
     # 创建FedProx和MOON算法的超参数
     strategy_params = {}
-    if args.strategy.lower() == 'fedprox':
-        if args.mu is not None:
-            strategy_params['mu'] = args.mu
-        else:
-            raise ValueError("mu参数不存在")
-    elif args.strategy.lower() == 'moon':
-        if args.mu is not None:
-            strategy_params['mu'] = args.mu
-        else:
-            raise ValueError("mu参数不存在")
-        if args.temperature is not None:
-            strategy_params['temperature'] = args.temperature
-        else:
-            raise ValueError("temperature参数不存在")
-    elif args.strategy.lower() == 'feddistill':
-        if args.num_classes is not None:
-            strategy_params['num_classes'] = args.num_classes
-        else:
-            raise ValueError("num_classes参数不存在")
-    elif args.strategy.lower() == 'fedgen':
-        if args.latent_dim is not None:
-            strategy_params['latent_dim'] = args.latent_dim
-        else:
-            raise ValueError("latent_dim参数不存在")
-        if args.num_classes is not None:
-            strategy_params['num_classes'] = args.num_classes
-        else:
-            raise ValueError("num_classes参数不存在")
-        if args.feature_dim is not None:
-            strategy_params['feature_dim'] = args.feature_dim
-        else:
-            raise ValueError("feature_dim参数不存在")
-        if args.hidden_dim is not None:
-            strategy_params['hidden_dim'] = args.hidden_dim
-        else:
-            raise ValueError("hidden_dim参数不存在")
+    strategy_params['num_classes'] = num_classes
+    
+
+    if args.strategy.lower() == 'fedgen':
+        latent_dim = 64
+        hidden_dim= 256
+        strategy_params['feature_dim'] = feature_dim
+        strategy_params['latent_dim'] = latent_dim
+        strategy_params['hidden_dim'] = hidden_dim
         strategy_params['generator_model'] = Generator(
-            latent_dim=args.latent_dim,
-            feature_dim=args.feature_dim,
-            hidden_dim=args.hidden_dim,
-            num_classes=args.num_classes
+            feature_dim=feature_dim,
+            num_classes=num_classes,
+            latent_dim=latent_dim,
+            hidden_dim=hidden_dim
         )
     
     # 配置模型和训练参数
@@ -171,6 +155,7 @@ def setup_and_train_federated_model(args):
         strategy=args.strategy.lower(),  # 联邦学习策略
         model_config=model_config,  # 模型配置
         client_dataset_dict=dataset_dict,  # 每个客户端的数据集字典
+        seed=args.seed,
         **strategy_params,  # 直接解包策略特定参数
     )
 
@@ -199,6 +184,11 @@ def setup_and_train_federated_model(args):
 def parse_arguments():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
+
+     # 联邦学习算法相关参数
+    parser.add_argument('--strategy', type=str, default='fedgen',
+                        choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone'],
+                        help='联邦学习策略')
     
     # 数据集相关参数
     parser.add_argument('--dataset', type=str, default='femnist', 
@@ -214,9 +204,9 @@ def parse_arguments():
     # 训练相关参数
     parser.add_argument('--batch_size', type=int, default=64, 
                         help='训练的批次大小')
-    parser.add_argument('--local_epochs', type=int, default=20,
+    parser.add_argument('--local_epochs', type=int, default=10,
                         help='每个客户端的本地训练轮数')
-    parser.add_argument('--comm_rounds', type=int, default=50,
+    parser.add_argument('--comm_rounds', type=int, default=30,
                         help='联邦学习的通信轮数')
     parser.add_argument('--ratio_client', type=float, default=1.0,
                         help='每轮参与训练的客户端比例')
@@ -225,33 +215,11 @@ def parse_arguments():
     parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'sgd'],
                         help='优化器类型')
     
-    # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='fedavg',
-                        choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen'],
-                        help='联邦学习策略')
-    parser.add_argument('--mu', type=float, default=0.01,
-                        help='FedProx和MOON算法的mu参数')
-    parser.add_argument('--temperature', type=float, default=0.5,
-                        help='MOON和FedDistill算法的temperature参数')
-    parser.add_argument('--gamma', type=float, default=0.5,
-                        help='FedDistill算法的知识蒸馏权重参数')
-    parser.add_argument('--alpha', type=float, default=1.0,
-                        help='FedGen算法的知识蒸馏权重参数')
-    parser.add_argument('--beta', type=float, default=0.5,
-                        help='FedGen算法的生成样本损失权重参数')
-    parser.add_argument('--latent_dim', type=int, default=64,
-                        help='FedGen算法的潜在空间维度')
-    parser.add_argument('--feature_dim', type=int,
-                        help='FedGen算法的特征维度')
-    parser.add_argument('--hidden_dim', type=int, default=256,
-                        help='FedGen算法的隐藏层维度')
-    parser.add_argument('--num_classes', type=int,
-                        help='FedGen算法和FedDistill算法的类别数量')
-    
+
     # 其他参数
     parser.add_argument('--seed', type=int, default=42,
                         help='随机种子')
-    parser.add_argument('--plot_distribution', type=bool, default=False,
+    parser.add_argument('--plot_distribution', type=bool, default=True,
                         help='是否绘制客户端标签分布')
     
     return parser.parse_args()
@@ -261,5 +229,5 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     setup_seed(args.seed)
-    setup_and_train_federated_model(args)
+    train_federated_model(args)
 

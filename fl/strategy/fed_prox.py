@@ -12,7 +12,7 @@ class FedProx(BaseClient):
     """FedProx算法实现"""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.mu = kwargs['mu']   
+        self.mu = kwargs.get('mu', 0.01)
 
     def proximal_term(self, w1:list, w2:list):
         """
@@ -58,6 +58,7 @@ class FedProx(BaseClient):
                         loss += self.mu/2 * proximal_term
                     epoch_loss += loss.item()  # 累加损失
                     loss.backward()  # 反向传播
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     self.optimizer.step()  # 更新模型参数
 
                     # 更新进度条
