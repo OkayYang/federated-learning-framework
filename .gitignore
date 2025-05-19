@@ -60,6 +60,13 @@ Thumbs.db
 *.db
 *.pth
 *.pkl
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.ico
 # Test and coverage reports
 *.coveragerc
 .coverage
