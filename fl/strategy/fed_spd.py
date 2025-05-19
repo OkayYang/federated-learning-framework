@@ -56,6 +56,7 @@ class FedSPD(BaseClient):
                 epoch_ce_loss = 0
                 epoch_kd_loss = 0
                 for data, target in self.train_loader:  # 获取每个 batch
+                    data, target = data.to(self.device), target.to(self.device)
                     self.optimizer.zero_grad()  # 清除之前的梯度
                     
                     # 获取中间表征和输出
@@ -63,7 +64,7 @@ class FedSPD(BaseClient):
                     
                     # 初始化损失
                     ce_loss = self.loss(output, target)  # 交叉熵损失
-                    kd_loss = torch.tensor(0.0)          # 知识蒸馏损失                    
+                    kd_loss = torch.tensor(0.0, device=self.device)          # 知识蒸馏损失                    
                     # 如果有全局表征和logits，添加蒸馏损失
                     if global_reps is not None and global_logits is not None:
                         # 按类别收集当前批次的数据和对应的全局知识
@@ -85,11 +86,11 @@ class FedSPD(BaseClient):
                             
                             for class_id in available_classes:
                                 # 获取全局表征并转换为张量
-                                global_rep = torch.tensor(global_reps[class_id], device=head_out.device)
+                                global_rep = torch.tensor(global_reps[class_id], device=self.device)
                                 global_features.append(global_rep)
                                 
                                 # 获取全局logits
-                                global_target = torch.tensor(global_logits[class_id], device=head_out.device)
+                                global_target = torch.tensor(global_logits[class_id], device=self.device)
                                 global_targets.append(global_target)
                             
                             # 堆叠为批次
@@ -116,7 +117,7 @@ class FedSPD(BaseClient):
                             log_probs = F.log_softmax(model_outputs_scaled, dim=1)
                             kd_loss = self.kl_loss(log_probs, probs) * (self.temperature ** 2)
                         else:
-                            kd_loss = torch.tensor(0.0, device=ce_loss.device)
+                            kd_loss = torch.tensor(0.0, device=self.device)
                     
                     # 总损失 = CE损失 + KD损失
                     total_batch_loss = (1 - self.alpha) * ce_loss + self.alpha * kd_loss

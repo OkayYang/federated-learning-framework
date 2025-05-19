@@ -30,12 +30,13 @@ class FedAlone(BaseClient):
             for epoch in range(self.epochs):  # 多轮本地训练
                 epoch_loss = 0
                 for data, target in self.train_loader:  # 获取每个 batch
+                    data, target = data.to(self.device), target.to(self.device)
                     self.optimizer.zero_grad()  # 清除之前的梯度
                     output = self.model(data)  # 前向传播
                     loss = self.loss(output, target)  # 计算损失
                     epoch_loss += loss.item()  # 累加损失
                     loss.backward()  # 反向传播
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     self.optimizer.step()  # 更新模型参数
 
                     # 更新进度条

@@ -5,6 +5,7 @@
 import copy
 import torch
 from tqdm import tqdm
+import numpy as np
 
 from fl.fl_base import BaseClient
 
@@ -16,10 +17,10 @@ class Scaffold(BaseClient):
         self.cg = []
         self.c = []
         for param in self.model.parameters():
-            self.c.append(torch.zeros_like(param))
-            self.cg.append(torch.zeros_like(param))
+            self.c.append(torch.zeros_like(param, device=self.device))
+            self.cg.append(torch.zeros_like(param, device=self.device))
         self.eta_l = kwargs.get('lr', 0.01)
-        self.global_model = copy.deepcopy(self.model)  # 全局模型副本
+        self.global_model = copy.deepcopy(self.model).to(self.device)  # 全局模型副本
         
 
     def local_train(self, sync_round: int, weights=None, cg=None):
@@ -27,31 +28,26 @@ class Scaffold(BaseClient):
         训练方法，根据当前通信轮次(sync_round)进行相应的训练更新
         :param weights: 服务器传递过来的模型权重
         :param sync_round: 当前的通信轮次
+        :param cg: 全局控制变量
         """
         # 1. 加载服务器传来的全局模型权重
         if weights is not None:
             self.update_weights(weights)
+            # 更新全局模型副本
             self.global_model.load_state_dict(self.model.state_dict())
             for param in self.global_model.parameters():
                 param.requires_grad = False
         
-        # 确保cg不会记录梯度
+        # 2. 更新全局控制变量
         if cg is not None:
-            for i, c in enumerate(cg):
-                if isinstance(c, torch.Tensor):
-                    self.cg[i] = c.detach().clone()
-                else:
-                    self.cg[i] = torch.tensor(c)
+            self.cg = [torch.tensor(g, dtype=torch.float32, device=self.device).detach().clone() if isinstance(g, np.ndarray) else g.detach().clone().to(self.device) for g in cg]
         
-        # 确保c不会记录梯度
-        for i in range(len(self.c)):
-            self.c[i] = self.c[i].detach()
-
         # 3. 开始本地训练
         self.model.train()
         total_loss = 0
         num_sample = len(self.train_loader.dataset)
         total_batches = len(self.train_loader) * self.epochs
+        
         with tqdm(
             total=total_batches,
             desc=f"Client {self.client_id} Training Progress (Scaffold)"
@@ -59,6 +55,7 @@ class Scaffold(BaseClient):
             for epoch in range(self.epochs):  # 多轮本地训练
                 epoch_loss = 0
                 for data, target in self.train_loader:  # 获取每个 batch
+                    data, target = data.to(self.device), target.to(self.device)
                     self.optimizer.zero_grad()  # 清除之前的梯度
                     output = self.model(data)  # 前向传播
                     loss = self.loss(output, target)  # 计算损失

@@ -12,6 +12,7 @@ class Generator(nn.Module):
         self.feature_dim = feature_dim
         self.num_classes = num_classes
         self.hidden_dim = hidden_dim
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # 嵌入层，将类别标签转换为嵌入向量
         self.label_embedding = nn.Embedding(num_classes, hidden_dim)
@@ -67,7 +68,7 @@ class Generator(nn.Module):
         keys = self.state_dict().keys()
         weights_dict = {}
         for k, v in zip(keys, weights):
-            weights_dict[k] = torch.Tensor(np.copy(v))
+            weights_dict[k] = torch.Tensor(np.copy(v)).to(self.device)
         self.load_state_dict(weights_dict)
 
 class DiversityLoss(nn.Module):

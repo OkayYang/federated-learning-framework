@@ -30,9 +30,9 @@ class FedDistill(BaseClient):
         
         # Initialize storage for each class
         for l in range(self.num_classes):
-            self.logit_storage[l] = torch.zeros(self.num_classes)
+            self.logit_storage[l] = torch.zeros(self.num_classes, device=self.device)
             self.logit_counts[l] = 0
-            self.global_logits[l] = torch.zeros(self.num_classes)
+            self.global_logits[l] = torch.zeros(self.num_classes, device=self.device)
 
     def _compute_distillation_loss(self, student_logits, teacher_logits):
         
@@ -58,7 +58,7 @@ class FedDistill(BaseClient):
 
         # 3. 重置logit存储
         for l in range(self.num_classes):
-            self.logit_storage[l] = torch.zeros(self.num_classes)
+            self.logit_storage[l] = torch.zeros(self.num_classes, device=self.device)
             self.logit_counts[l] = 0
 
         # 4. 开始本地训练
@@ -76,6 +76,7 @@ class FedDistill(BaseClient):
                 kd_loss = 0
                 ce_loss = 0
                 for data, target in self.train_loader:
+                    data, target = data.to(self.device), target.to(self.device)
                     self.optimizer.zero_grad()
                     
                     # 前向传播
@@ -129,7 +130,7 @@ class FedDistill(BaseClient):
             if self.logit_counts[label] > 0:
                 averaged_logits[label] = self.logit_storage[label] / self.logit_counts[label]
             else:
-                averaged_logits[label] = torch.zeros(self.num_classes)
+                averaged_logits[label] = torch.zeros(self.num_classes, device=self.device)
 
         # 6. 获取模型权重
         model_weights = self.get_weights(return_numpy=True)

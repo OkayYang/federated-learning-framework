@@ -19,7 +19,7 @@ class Moon(BaseClient):
         # 设置MOON特定参数
         self.buffer_size = 1
         self.prev_model_list = []  # 历史模型列表
-        self.global_model = copy.deepcopy(self.model)  # 全局模型副本
+        self.global_model = copy.deepcopy(self.model).to(self.device)  # 全局模型副本
         
 
     def local_train(self, sync_round: int, weights=None):
@@ -51,6 +51,7 @@ class Moon(BaseClient):
                 epoch_contrastive_loss = 0
                 epoch_original_loss = 0
                 for data, target in self.train_loader:  # 获取每个 batch
+                    data, target = data.to(self.device), target.to(self.device)
                     self.optimizer.zero_grad()  # 清除之前的梯度
                     # 前向传播 - 获取中间表示和预测结果
                     _, pro1, output = self.model(data, return_all=True)
@@ -70,7 +71,7 @@ class Moon(BaseClient):
                         nega = self.cosine_similarity_fn(pro1, pro3)
                         logits = torch.cat((logits,nega.reshape(-1,1)), dim=1)
                     logits = logits / self.temperature
-                    labels = torch.zeros(data.size(0), dtype=torch.long)
+                    labels = torch.zeros(data.size(0), dtype=torch.long, device=self.device)
                     contrastive_loss = self.mu * self.loss(logits, labels)
                     
                     # 合并损失
@@ -98,7 +99,7 @@ class Moon(BaseClient):
         # 4. 获取训练后的权重
         model_weights = self.get_weights(return_numpy=True)
         # 创建当前模型的副本，并添加到历史模型列表
-        history_model = copy.deepcopy(self.model)
+        history_model = copy.deepcopy(self.model).to(self.device)
         history_model.eval()
         for param in history_model.parameters():
             param.requires_grad = False

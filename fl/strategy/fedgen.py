@@ -34,7 +34,7 @@ class FedGen(BaseClient):
             num_classes=self.num_classes,
             latent_dim=self.latent_dim,
             hidden_dim=self.hidden_dim
-        )
+        ).to(self.device)
         self.generator.update_weights(self.init_generator.get_weights(return_numpy=True))
 
         # 初始化KL散度损失函数，使用batchmean模式避免警告
@@ -92,6 +92,7 @@ class FedGen(BaseClient):
                 beta = self._exp_lr_scheduler(sync_round, decay=0.98, init_lr=self.beta)
                 # 本地真实数据训练
                 for data, target in self.train_loader:
+                    data, target = data.to(self.device), target.to(self.device)
                     self.optimizer.zero_grad()
                     
                     # 前向传播
@@ -103,7 +104,7 @@ class FedGen(BaseClient):
                     y_input = target.clone().detach()
                     batch_size = len(y_input)
                     # 生成噪声
-                    z = torch.randn(batch_size, self.latent_dim)
+                    z = torch.randn(batch_size, self.latent_dim).to(self.device)
                     # 生成特征
                     with torch.no_grad():  # ❗必须要这个
                         gen_features = self.generator(z, target)
@@ -118,7 +119,7 @@ class FedGen(BaseClient):
                     sampled_labels = np.random.choice(
                         self.num_classes, batch_size
                     )
-                    sampled_labels = torch.LongTensor(sampled_labels)
+                    sampled_labels = torch.LongTensor(sampled_labels).to(self.device)
                     with torch.no_grad():  # ❗必须要这个
                         sampled_features = self.generator(z, sampled_labels)
                     sampled_logits = self.model(sampled_features,start_layer=True)

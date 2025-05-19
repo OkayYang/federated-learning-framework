@@ -4,6 +4,7 @@
 # @Describe:
 import torch
 from tqdm import tqdm
+import numpy as np
 
 from fl.fl_base import BaseClient
 
@@ -25,7 +26,11 @@ class FedProx(BaseClient):
         assert l1 == len(w2), "weights should be same in the shape"
         proximal_term = 0
         for i in range(l1):
-            proximal_term += (torch.tensor(w1[i]) - w2[i]).norm(2) ** 2
+            if isinstance(w1[i], np.ndarray):
+                w1_tensor = torch.tensor(w1[i], dtype=torch.float32, device=self.device)
+            else:
+                w1_tensor = w1[i].detach().clone().to(self.device)
+            proximal_term += (w1_tensor - w2[i]).norm(2) ** 2
         return proximal_term
 
     def local_train(self, sync_round: int, weights=None):
@@ -50,6 +55,7 @@ class FedProx(BaseClient):
             for epoch in range(self.epochs):  # 多轮本地训练
                 epoch_loss = 0
                 for data, target in self.train_loader:  # 获取每个 batch
+                    data, target = data.to(self.device), target.to(self.device)
                     self.optimizer.zero_grad()  # 清除之前的梯度
                     output = self.model(data)  # 前向传播
                     loss = self.loss(output, target)  # 计算损失

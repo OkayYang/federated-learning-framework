@@ -43,6 +43,10 @@ class FLServer:
         }
         self.kwargs = kwargs
         self.global_generator = self.kwargs.get('generator_model', None)
+        # 确保生成器模型在正确的设备上
+        if self.global_generator is not None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.global_generator = self.global_generator.to(device)
 
     def initialize_client_weights(self):
         """设置服务器端的全局模型"""
@@ -289,6 +293,9 @@ class FLServer:
         label_count_list = []
         client_model_list = []
         
+        # 获取设备
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
         # 1. 客户端训练
         for client_name, worker in selected_workers.items():
             client_weight, sample_num, train_loss, label_count = worker.local_train(
@@ -330,9 +337,9 @@ class FLServer:
                 self.global_generator.num_classes, self.global_generator.train_batch_size
             )
             # 确保转换为PyTorch张量
-            sampled_labels = torch.LongTensor(sampled_labels)
+            sampled_labels = torch.LongTensor(sampled_labels).to(device)
             # 生成随机噪声
-            eps = torch.randn(self.global_generator.train_batch_size, self.global_generator.latent_dim)
+            eps = torch.randn(self.global_generator.train_batch_size, self.global_generator.latent_dim).to(device)
             # 生成合成数据
             synthetic_features = self.global_generator(eps, sampled_labels)
             diversity_loss = self.global_generator.diversity_loss(eps, synthetic_features)
@@ -355,7 +362,7 @@ class FLServer:
                 weight = torch.tensor(
                     batch_weights,
                     dtype=torch.float32,
-                )
+                ).to(device)
                 expand_weight = np.tile(weight.cpu().numpy(), (1, self.global_generator.num_classes))
                 with torch.no_grad():
                     teacher_logits = client_model_list[idx](synthetic_features,start_layer=True)
@@ -368,7 +375,7 @@ class FLServer:
                 teacher_loss += teacher_loss_
                 teacher_logit += teacher_logits * torch.tensor(
                     expand_weight, dtype=torch.float32
-                )
+                ).to(device)
              
 
             # 全局模型当学生,参与方模型logit平均当老师，这里没有维护全局模型，就假装第一个参与方模型
@@ -378,7 +385,7 @@ class FLServer:
             keys = global_model.state_dict().keys()
             weights_dict = {}
             for k, v in zip(keys, global_weight):
-                weights_dict[k] = torch.Tensor(np.copy(v))
+                weights_dict[k] = torch.Tensor(np.copy(v)).to(device)
             global_model.load_state_dict(weights_dict)
             global_model.eval()
             with torch.no_grad():

@@ -26,7 +26,8 @@ class BaseClient(ABC):
         **kwargs,
     ):
         self.client_id = client_id
-        self.model = model
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = model.to(self.device)
         self.loss = loss
         self.optimizer = optimizer
         self.epochs = epochs
@@ -50,6 +51,7 @@ class BaseClient(ABC):
         total = 0
         with torch.no_grad():
             for data, target in self.test_loader:
+                data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
                 test_loss += self.loss(output, target).item()
                 _, predicted = torch.max(output.data, 1)
@@ -73,7 +75,7 @@ class BaseClient(ABC):
         keys = self.model.state_dict().keys()
         weights_dict = {}
         for k, v in zip(keys, weights):
-            weights_dict[k] = torch.Tensor(np.copy(v))
+            weights_dict[k] = torch.Tensor(np.copy(v)).to(self.device)
         self.model.load_state_dict(weights_dict)
 
     def get_gradients(self, parameters=None):
@@ -126,8 +128,8 @@ class ModelConfig:
 
     def get_model(self):
         model = self.model_fn()
-        # device_type = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # model.to(device_type)
+        device_type = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model.to(device_type)
         return model
 
     def get_epochs(self):
