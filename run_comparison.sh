@@ -40,6 +40,8 @@ PARTITION="dirichlet"   # 数据分区方式: iid, noiid, dirichlet
 NUM_CLIENTS=10      # 客户端数量
 DIR_BETA=0.3       # Dirichlet分布参数，仅在PARTITION="dirichlet"时使用
 
+# 检查CUDA
+python check_cuda.py
 # 运行FedAlone算法
 echo ""
 echo "========================================"
