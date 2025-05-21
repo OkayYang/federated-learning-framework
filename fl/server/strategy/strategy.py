@@ -244,7 +244,7 @@ class FedGenStrategy(AggregationStrategy):
                 expand_weight = np.tile(weight.cpu().numpy(), (1, self.global_generator.num_classes))
                 
                 with torch.no_grad():
-                    teacher_logits = client_model_list[idx](synthetic_features, start_layer=True)
+                    teacher_logits = client_model_list[idx](synthetic_features, start_layer="classify")
                 
                 teacher_loss_ = torch.mean(
                     self.global_generator.loss_fn(teacher_logits, sampled_labels) * weight
@@ -266,7 +266,7 @@ class FedGenStrategy(AggregationStrategy):
             global_model.eval()
             
             with torch.no_grad():
-                student_output = global_model(synthetic_features, start_layer=True).clone().detach()
+                student_output = global_model(synthetic_features, start_layer="classify").clone().detach()
             
             student_loss = torch.nn.functional.kl_div(
                 torch.nn.functional.log_softmax(student_output, dim=1),
@@ -312,7 +312,7 @@ class FedSPDStrategy(AggregationStrategy):
             
             client_weight, sample_num, train_loss, class_reps, class_logits = worker.local_train(
                 sync_round=round_num,
-                weights=None,
+                weights=global_weights,
                 global_reps=self.global_reps,
                 global_logits=self.global_logits
             )

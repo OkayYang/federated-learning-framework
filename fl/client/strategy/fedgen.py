@@ -106,11 +106,11 @@ class FedGen(BaseClient):
                     # 生成噪声
                     z = torch.randn(batch_size, self.latent_dim).to(self.device)
                     # 生成特征
-                    with torch.no_grad():  # ❗必须要这个
+                    with torch.no_grad():
                         gen_features = self.generator(z, target)
                     
                     # 通过模型的分类层计算生成特征的预测
-                    gen_logits = self.model(gen_features,start_layer=True)
+                    gen_logits = self.model(gen_features,start_layer="classify")
                     
                     # 计算知识蒸馏损失
                     kd_loss = self._compute_distillation_loss(logits, gen_logits)
@@ -120,9 +120,9 @@ class FedGen(BaseClient):
                         self.num_classes, batch_size
                     )
                     sampled_labels = torch.LongTensor(sampled_labels).to(self.device)
-                    with torch.no_grad():  # ❗必须要这个
+                    with torch.no_grad():  
                         sampled_features = self.generator(z, sampled_labels)
-                    sampled_logits = self.model(sampled_features,start_layer=True)
+                    sampled_logits = self.model(sampled_features,start_layer="classify")
                     # 计算生成样本的分类损失
                     teacher_loss = self.loss(sampled_logits, sampled_labels)
                     

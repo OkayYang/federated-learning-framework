@@ -66,25 +66,25 @@ def train_federated_model(args):
         client_list, dataset_dict = datasets.load_feminist_dataset()
         model_fn = FeMNISTNet
         num_classes = 62
-        feature_dim = 16 * 4 * 4
+        feature_dim = 128
     elif args.dataset.lower() == 'mnist':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_mnist_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
         model_fn = MNISTNet
         num_classes = 10
-        feature_dim = 64 * 5 * 5
+        feature_dim = 128
     elif args.dataset.lower() == 'cifar10':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar10_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
         model_fn = CIFAR10Net
         num_classes = 10
-        feature_dim = 128 * 4 * 4
+        feature_dim = 256
     elif args.dataset.lower() == 'cifar100':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar100_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
         model_fn = CIFAR100Net
         num_classes = 100
-        feature_dim = 256 * 4 * 4
+        feature_dim = 512
     else:
         raise ValueError(f"不支持的数据集: {args.dataset}")
     
@@ -190,7 +190,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
 
      # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='fedgen',
+    parser.add_argument('--strategy', type=str, default='fedspd',
                         choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone'],
                         help='联邦学习策略')
     
@@ -198,21 +198,21 @@ def parse_arguments():
     parser.add_argument('--dataset', type=str, default='femnist', 
                         choices=['femnist', 'mnist', 'cifar10', 'cifar100'],
                         help='要使用的数据集 (femnist, mnist, cifar10, cifar100)')
-    parser.add_argument('--partition', type=str, default='noiid', choices=['iid', 'noiid', 'dirichlet'],
+    parser.add_argument('--partition', type=str, default='dirichlet', choices=['iid', 'noiid', 'dirichlet'],
                         help='数据分区方式 (iid 或 noiid 或 dirichlet)')
     parser.add_argument('--num_clients', type=int, default=10,
                         help='当使用MNIST/CIFAR数据集时的客户端数量')
-    parser.add_argument('--dir_beta', type=float, default=0.4,
+    parser.add_argument('--dir_beta', type=float, default=0.3,
                         help='当使用dirichlet划分方式时的狄利克雷分布的参数')
     
     # 训练相关参数
     parser.add_argument('--batch_size', type=int, default=64, 
                         help='训练的批次大小')
-    parser.add_argument('--local_epochs', type=int, default=10,
+    parser.add_argument('--local_epochs', type=int, default=20,
                         help='每个客户端的本地训练轮数')
     parser.add_argument('--comm_rounds', type=int, default=30,
                         help='联邦学习的通信轮数')
-    parser.add_argument('--ratio_client', type=float, default=1.0,
+    parser.add_argument('--ratio_client', type=float, default=0.8,
                         help='每轮参与训练的客户端比例')
     parser.add_argument('--lr', type=float, default=0.01,
                         help='学习率')

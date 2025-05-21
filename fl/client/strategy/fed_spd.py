@@ -19,7 +19,7 @@ class FedSPD(BaseClient):
         
         # 知识蒸馏核心参数
         self.temperature = kwargs.get('temperature', 2.0)  # 使用更低的温度使分布更加锐利
-        self.alpha = kwargs.get('alpha', 0.5)             # 软目标和硬目标的平衡系数
+        self.alpha = kwargs.get('alpha', 0.6)             # 软目标和硬目标的平衡系数
         
         # 初始化KL散度损失函数，使用batchmean模式避免警告
         self.kl_loss = nn.KLDivLoss(reduction='batchmean')
@@ -59,16 +59,13 @@ class FedSPD(BaseClient):
                     self.optimizer.zero_grad()  # 清除之前的梯度
                     
                     # 获取中间表征和输出
-                    head_out, _, output = self.model(data, return_all=True)
+                    hidden, repout, output = self.model(data, return_all=True)
                     
                     # 初始化损失
                     ce_loss = self.loss(output, target)  # 交叉熵损失
                     kd_loss = torch.tensor(0.0, device=self.device)          # 知识蒸馏损失                    
                     # 如果有全局表征和logits，添加蒸馏损失
                     if global_reps is not None and global_logits is not None:
-                        # 按类别收集当前批次的数据和对应的全局知识
-                        batch_kd_loss = 0.0
-                        valid_samples = 0
                         
                         # 收集当前批次中存在于全局知识中的类别
                         available_classes = []
@@ -108,7 +105,7 @@ class FedSPD(BaseClient):
                             # Check if we have enough samples for BatchNorm
                             if len(global_features_batch) > 1:
                                 # Forward through model starting from mapping layer
-                                model_outputs = self.model(global_features_batch, start_layer=True)
+                                model_outputs = self.model(global_features_batch, start_layer="classify")
                                 
                                 # Apply temperature scaling to student model output
                                 model_outputs_scaled = model_outputs / self.temperature
@@ -132,7 +129,7 @@ class FedSPD(BaseClient):
                             if y not in class_reps:
                                 class_reps[y] = []
                                 class_logits[y] = []
-                            class_reps[y].append(head_out[i].detach().cpu().numpy())
+                            class_reps[y].append(repout[i].detach().cpu().numpy())
                             class_logits[y].append(output[i].detach().cpu().numpy())
                     
                     # 反向传播和优化

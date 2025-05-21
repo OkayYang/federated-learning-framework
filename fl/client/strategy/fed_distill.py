@@ -48,8 +48,8 @@ class FedDistill(BaseClient):
         联邦学习算法：FedDistill, 联邦学习算法中，每个客户端独立训练，不进行互相通信
         """
         # 1. 更新模型权重(这里可以保持原论文一致不更新)
-        if weights is not None:
-            self.update_weights(weights)
+        # if weights is not None:
+        #     self.update_weights(weights)
         
         # 2. 更新全局logits
         if global_logits is not None:

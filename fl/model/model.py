@@ -19,10 +19,13 @@ class FeMNISTNet(nn.Module):
         self.fc1 = nn.Linear(16 * 4 * 4, 128)  # 4x4是通过两次2x2的池化层得到的
         self.fc2 = nn.Linear(128, 62)
 
-    def forward(self, x, start_layer=False, return_all=False):
-        if start_layer:
-            x = self.fc1(x)
+    def forward(self, x, start_layer="raw", return_all=False):
+        if start_layer == "hidden":
+            x = self.fc1(h)
             x = self.fc2(F.relu(x))
+            return x
+        elif start_layer == "classify":
+            x = self.fc2(x)
             return x
         else:
             x = self.pool(F.relu(self.conv1(x)))
@@ -48,10 +51,13 @@ class MNISTNet(nn.Module):
         self.fc1 = nn.Linear(64 * 5 * 5, 128)
         self.fc2 = nn.Linear(128, 10)  # 输出10个类别
 
-    def forward(self, x, start_layer=False, return_all=False):
-        if start_layer:
+    def forward(self, x, start_layer="raw", return_all=False):
+        if start_layer == "hidden":
             x = self.fc1(x)
             x = self.fc2(F.relu(x))
+            return x
+        elif start_layer == "classify":
+            x = self.fc2(x)
             return x
         else:
             # 第一层卷积 + ReLU + 池化
@@ -120,7 +126,7 @@ class CIFAR10Net(nn.Module):
         # 输出层 - 将隐藏空间映射到类别空间
         self.classifier = nn.Linear(256, 10)  # CIFAR10有10个类别
     
-    def forward(self, x, start_layer=False, return_all=False):
+    def forward(self, x, start_layer="raw", return_all=False):
         """
         前向传播函数
         
@@ -132,25 +138,31 @@ class CIFAR10Net(nn.Module):
         Returns:
             模型输出
         """
-        if start_layer:
+        if start_layer == "hidden":
             # 从映射层开始，适用于生成的特征输入
-            features = x
+            hidden = self.mapping(x)
+            # 通过输出层获得类别预测
+            logits = self.classifier(hidden)
+            return logits
+        elif start_layer == "classify":
+            logits = self.classifier(x)
+            return logits
         else:
             # 从头部开始，提取特征
             x = self.backbone(x)
             features = x.view(x.size(0), -1)
         
-        # 通过映射层
-        hidden = self.mapping(features)
-        
-        # 通过输出层获得类别预测
-        logits = self.classifier(hidden)
-        
-        if return_all:
-            # 返回中间特征表示（用于对比学习、特征可视化等）
-            return features, hidden, logits
-        
-        return logits
+            # 通过映射层
+            hidden = self.mapping(features)
+            
+            # 通过输出层获得类别预测
+            logits = self.classifier(hidden)
+            
+            if return_all:
+                # 返回中间特征表示（用于对比学习、特征可视化等）
+                return features, hidden, logits
+            
+            return logits
         
     def get_features(self, x):
         """提取输入的特征表示"""
@@ -218,7 +230,7 @@ class CIFAR100Net(nn.Module):
         # 输出层 - 将隐藏空间映射到类别空间
         self.classifier = nn.Linear(512, 100)  # CIFAR100有100个类别
     
-    def forward(self, x, start_layer=False, return_all=False):
+    def forward(self, x, start_layer="raw", return_all=False):
         """
         前向传播函数
         
@@ -230,25 +242,31 @@ class CIFAR100Net(nn.Module):
         Returns:
             模型输出
         """
-        if start_layer:
+        if start_layer == "hidden":
             # 从映射层开始，适用于生成的特征输入
-            features = x
+            hidden = self.mapping(x)
+            # 通过输出层获得类别预测
+            logits = self.classifier(hidden)
+            return logits
+        elif start_layer == "classify":
+            logits = self.classifier(x)
+            return logits
         else:
             # 从头部开始，提取特征
             x = self.backbone(x)
             features = x.view(x.size(0), -1)
         
-        # 通过映射层
-        hidden = self.mapping(features)
-        
-        # 通过输出层获得类别预测
-        logits = self.classifier(hidden)
-        
-        if return_all:
-            # 返回中间特征表示（用于对比学习、特征可视化等）
-            return features, hidden, logits
-        
-        return logits
+            # 通过映射层
+            hidden = self.mapping(features)
+            
+            # 通过输出层获得类别预测
+            logits = self.classifier(hidden)
+            
+            if return_all:
+                # 返回中间特征表示（用于对比学习、特征可视化等）
+                return features, hidden, logits
+            
+            return logits
         
     def get_features(self, x):
         """提取输入的特征表示"""
