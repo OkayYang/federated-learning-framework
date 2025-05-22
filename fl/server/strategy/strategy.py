@@ -173,7 +173,7 @@ class FedGenStrategy(AggregationStrategy):
             generator_weights = self.global_generator.get_weights(return_numpy=True)
             client_weight, sample_num, train_loss, label_count  =  worker.local_train(
                 sync_round=round_num,
-                weights=None,
+                weights=global_weights,
                 generator_weights=generator_weights
             )
             
