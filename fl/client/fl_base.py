@@ -8,6 +8,7 @@ from typing import Callable
 from torch.utils.data import DataLoader
 import numpy as np
 import torch
+import random
 from torch import device, nn, optim
 
 
@@ -35,6 +36,20 @@ class BaseClient(ABC):
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.kwargs = kwargs
+        
+        # 设置客户端特定的随机种子，确保环境隔离
+        self.seed = kwargs.get('seed', 42)
+        self._set_seed(self.seed)
+        
+    def _set_seed(self, seed):
+        """设置随机种子以确保可复现性"""
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
+            
     @abstractmethod
     def local_train(self, sync_round: int, weights=None):
         """
@@ -44,26 +59,49 @@ class BaseClient(ABC):
         """
         pass
 
-    def evaluate(self,test_dataset = None):
+    def evaluate(self, test_dataset=None):
+        """
+        评估模型性能
+        :param test_dataset: 可选的测试数据集，如果为None则使用客户端自己的测试数据
+        :return: (accuracy, test_loss)
+        """
+        # 确保模型处于评估模式
         self.model.eval()
         correct = 0
         test_loss = 0
         total = 0
+        
+        # 根据输入选择测试数据集
         if test_dataset is None:
             test_loader = self.test_loader
         else:
-            test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=True)
+            # 创建统一的数据加载器，确保评估条件一致
+            test_loader = DataLoader(
+                test_dataset, 
+                batch_size=self.batch_size, 
+                shuffle=False,  # 评估时不打乱数据顺序，确保一致性
+                drop_last=False  # 不丢弃最后一个批次
+            )
 
-        with torch.no_grad():
+        with torch.no_grad():  # 不计算梯度
             for data, target in test_loader:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
-                test_loss += self.loss(output, target).item()
+                
+                # 累加批次损失
+                batch_loss = self.loss(output, target).item()
+                test_loss += batch_loss * len(data)  # 按样本数加权
+                
+                # 计算预测准确度
                 _, predicted = torch.max(output.data, 1)
                 total += target.size(0)
                 correct += (predicted == target).sum().item()
-        accuracy = correct / total
-        return accuracy, test_loss / len(test_loader)
+        
+        # 计算平均损失和准确率
+        accuracy = correct / total if total > 0 else 0
+        avg_loss = test_loss / total if total > 0 else float('inf')
+        
+        return accuracy, avg_loss
 
     def get_weights(self, return_numpy=False):
         if not return_numpy:
