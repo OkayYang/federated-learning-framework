@@ -27,7 +27,7 @@ DATASET="$1"
 # 获取要运行的算法列表
 if [ $# -eq 2 ]; then
     if [ "$2" = "all" ]; then
-        ALGORITHMS="fedavg,fedprox,moon,scaffold,feddistill,fedgen,fedspd,fedalone"
+        ALGORITHMS="fedavg,fedprox,moon,feddistill,fedgen,fedspd,fedalone"
     else
         ALGORITHMS="$2"
     fi
@@ -49,13 +49,13 @@ echo "选择的算法: $ALGORITHMS"
 # 设置基本参数
 BATCH_SIZE=64    # 批处理大小
 LOCAL_EPOCHS=10  # 本地训练轮数
-COMM_ROUNDS=20  # 通信轮数
+COMM_ROUNDS=50  # 通信轮数
 RATIO_CLIENT=0.8  # 每轮参与训练的客户端比例
 LEARNING_RATE=0.01  # 学习率
 OPTIMIZER="adam"    # 优化器: adam, sgd
 SEED=42             # 随机种子，保证实验可重复性
 PARTITION="dirichlet"   # 数据分区方式: iid, noiid, dirichlet
-NUM_CLIENTS=10      # 客户端数量
+NUM_CLIENTS=20      # 客户端数量
 DIR_BETA=0.3       # Dirichlet分布参数，仅在PARTITION="dirichlet"时使用
 
 # 创建日志目录
