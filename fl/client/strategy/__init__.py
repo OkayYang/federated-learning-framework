@@ -51,8 +51,8 @@ def create_client(
     batch_size = model_config.get_batch_size()
 
     client_dataset = client_dataset_dict[client_id]
-    train_dataLoader = DataLoader(client_dataset['train_dataset'], batch_size=batch_size, shuffle=True)
-    test_dataLoader = DataLoader(client_dataset['test_dataset'], batch_size=batch_size, shuffle=True)
+    train_dataLoader = DataLoader(client_dataset['train_dataset'], batch_size=batch_size, shuffle=True,drop_last=True)
+    test_dataLoader = DataLoader(client_dataset['test_dataset'], batch_size=batch_size, shuffle=True,drop_last=True)
 
     strategy = strategy.lower()
     if strategy not in _strategy_map:

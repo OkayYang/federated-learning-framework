@@ -1,24 +1,40 @@
 #!/bin/bash
 
 # 联邦学习算法比较实验脚本
-# 这个脚本会运行FedAvg, FedProx, MOON, Scaffold和FedGen算法，并生成对比结果
-# 使用方法: ./run_comparison.sh [数据集名称]
-# 示例: ./run_comparison.sh mnist
+# 这个脚本会运行指定的联邦学习算法，并生成对比结果
+# 使用方法: ./run_comparison.sh [数据集名称] [算法列表]
+# 示例: ./run_comparison.sh mnist "fedavg,fedprox,moon"
+# 示例: ./run_comparison.sh mnist all  # 运行所有算法
 
 echo "========================================"
 echo "  联邦学习算法比较实验"
 echo "========================================"
 
 # 检查命令行参数
-if [ $# -eq 0 ]; then
+if [ $# -lt 1 ]; then
     echo "错误: 未指定数据集名称"
-    echo "使用方法: ./run_comparison.sh [数据集名称]"
+    echo "使用方法: ./run_comparison.sh [数据集名称] [算法列表]"
     echo "支持的数据集: mnist, femnist, cifar10, cifar100"
+    echo "支持的算法: fedavg, fedprox, moon, scaffold, feddistill, fedgen, fedspd, fedalone"
+    echo "示例: ./run_comparison.sh mnist \"fedavg,fedprox,moon\""
+    echo "示例: ./run_comparison.sh mnist all  # 运行所有算法"
     exit 1
 fi
 
 # 从命令行参数获取数据集名称
 DATASET="$1"
+
+# 获取要运行的算法列表
+if [ $# -eq 2 ]; then
+    if [ "$2" = "all" ]; then
+        ALGORITHMS="fedavg,fedprox,moon,scaffold,feddistill,fedgen,fedspd,fedalone"
+    else
+        ALGORITHMS="$2"
+    fi
+else
+    # 默认运行所有算法
+    ALGORITHMS="fedprox"
+fi
 
 # 验证数据集名称
 if [[ "$DATASET" != "mnist" && "$DATASET" != "femnist" && "$DATASET" != "cifar10" && "$DATASET" != "cifar100" ]]; then
@@ -28,11 +44,12 @@ if [[ "$DATASET" != "mnist" && "$DATASET" != "femnist" && "$DATASET" != "cifar10
 fi
 
 echo "选择的数据集: $DATASET"
+echo "选择的算法: $ALGORITHMS"
 
 # 设置基本参数
 BATCH_SIZE=64    # 批处理大小
 LOCAL_EPOCHS=10  # 本地训练轮数
-COMM_ROUNDS=30  # 通信轮数
+COMM_ROUNDS=20  # 通信轮数
 RATIO_CLIENT=0.8  # 每轮参与训练的客户端比例
 LEARNING_RATE=0.01  # 学习率
 OPTIMIZER="adam"    # 优化器: adam, sgd
@@ -52,6 +69,7 @@ LOG_FILE="${LOG_DIR}/experiment_$(date +%Y%m%d_%H%M%S).log"
     echo "  联邦学习算法比较实验"
     echo "========================================"
     echo "数据集: $DATASET"
+    echo "算法列表: $ALGORITHMS"
     echo "批处理大小: $BATCH_SIZE"
     echo "本地训练轮数: $LOCAL_EPOCHS"
     echo "通信轮数: $COMM_ROUNDS"
@@ -69,193 +87,31 @@ LOG_FILE="${LOG_DIR}/experiment_$(date +%Y%m%d_%H%M%S).log"
 # 检查CUDA
 python check_cuda.py | tee -a "$LOG_FILE"
 
-# 运行FedAlone算法
-{
-    echo ""
-    echo "========================================"
-    echo "  运行FedAlone算法"
-    echo "========================================"
-    echo ""
-} | tee -a "$LOG_FILE"
+# 运行指定的算法
+IFS=',' read -ra ALGORITHM_LIST <<< "$ALGORITHMS"
+for strategy in "${ALGORITHM_LIST[@]}"; do
+    {
+        echo ""
+        echo "========================================"
+        echo "  运行${strategy}算法"
+        echo "========================================"
+        echo ""
+    } | tee -a "$LOG_FILE"
 
-python main.py \
-    --dataset $DATASET \
-    --strategy fedalone \
-    --batch_size $BATCH_SIZE \
-    --local_epochs $LOCAL_EPOCHS \
-    --comm_rounds $COMM_ROUNDS \
-    --ratio_client $RATIO_CLIENT \
-    --lr $LEARNING_RATE \
-    --optimizer $OPTIMIZER \
-    --seed $SEED \
-    --partition $PARTITION \
-    --dir_beta $DIR_BETA \
-    --num_clients $NUM_CLIENTS 2>&1 | tee -a "$LOG_FILE"
-
-# 运行FedAvg算法
-{
-    echo ""
-    echo "========================================"
-    echo "  运行FedAvg算法"
-    echo "========================================"
-    echo ""
-} | tee -a "$LOG_FILE"
-
-python main.py \
-    --dataset $DATASET \
-    --strategy fedavg \
-    --batch_size $BATCH_SIZE \
-    --local_epochs $LOCAL_EPOCHS \
-    --comm_rounds $COMM_ROUNDS \
-    --ratio_client $RATIO_CLIENT \
-    --lr $LEARNING_RATE \
-    --optimizer $OPTIMIZER \
-    --seed $SEED \
-    --partition $PARTITION \
-    --dir_beta $DIR_BETA \
-    --num_clients $NUM_CLIENTS 2>&1 | tee -a "$LOG_FILE"
-
-
-# 运行FedProx算法
-{
-    echo ""
-    echo "========================================"
-    echo "  运行FedProx算法"
-    echo "========================================"
-    echo ""
-} | tee -a "$LOG_FILE"
-
-python main.py \
-    --dataset $DATASET \
-    --strategy fedprox \
-    --batch_size $BATCH_SIZE \
-    --local_epochs $LOCAL_EPOCHS \
-    --comm_rounds $COMM_ROUNDS \
-    --ratio_client $RATIO_CLIENT \
-    --lr $LEARNING_RATE \
-    --optimizer $OPTIMIZER \
-    --seed $SEED \
-    --partition $PARTITION \
-    --dir_beta $DIR_BETA \
-    --num_clients $NUM_CLIENTS 2>&1 | tee -a "$LOG_FILE"
-
-# 运行Scaffold算法
-{
-    echo ""
-    echo "========================================"
-    echo "  运行Scaffold算法"
-    echo "========================================"
-    echo ""
-} | tee -a "$LOG_FILE"
-
-python main.py \
-    --dataset $DATASET \
-    --strategy scaffold \
-    --batch_size $BATCH_SIZE \
-    --local_epochs $LOCAL_EPOCHS \
-    --comm_rounds $COMM_ROUNDS \
-    --ratio_client $RATIO_CLIENT \
-    --lr $LEARNING_RATE \
-    --optimizer $OPTIMIZER \
-    --seed $SEED \
-    --partition $PARTITION \
-    --dir_beta $DIR_BETA \
-    --num_clients $NUM_CLIENTS 2>&1 | tee -a "$LOG_FILE"
-
-# 运行MOON算法
-{
-    echo ""
-    echo "========================================"
-    echo "  运行MOON算法"
-    echo "========================================"
-    echo ""
-} | tee -a "$LOG_FILE"
-
-python main.py \
-    --dataset $DATASET \
-    --strategy moon \
-    --batch_size $BATCH_SIZE \
-    --local_epochs $LOCAL_EPOCHS \
-    --comm_rounds $COMM_ROUNDS \
-    --ratio_client $RATIO_CLIENT \
-    --lr $LEARNING_RATE \
-    --optimizer $OPTIMIZER \
-    --seed $SEED \
-    --partition $PARTITION \
-    --dir_beta $DIR_BETA \
-    --num_clients $NUM_CLIENTS 2>&1 | tee -a "$LOG_FILE"
-
-# 运行FedDistill算法
-{
-    echo ""
-    echo "========================================"
-    echo "  运行FedDistill算法"
-    echo "========================================"
-    echo ""
-} | tee -a "$LOG_FILE"
-
-python main.py \
-    --dataset $DATASET \
-    --strategy feddistill \
-    --batch_size $BATCH_SIZE \
-    --local_epochs $LOCAL_EPOCHS \
-    --comm_rounds $COMM_ROUNDS \
-    --ratio_client $RATIO_CLIENT \
-    --lr $LEARNING_RATE \
-    --optimizer $OPTIMIZER \
-    --seed $SEED \
-    --partition $PARTITION \
-    --dir_beta $DIR_BETA \
-    --num_clients $NUM_CLIENTS 2>&1 | tee -a "$LOG_FILE"
-
-
-# 运行FedGen算法
-{
-    echo ""
-    echo "========================================"
-    echo "  运行FedGen算法"
-    echo "========================================"
-    echo ""
-} | tee -a "$LOG_FILE"
-
-python main.py \
-    --dataset $DATASET \
-    --strategy fedgen \
-    --batch_size $BATCH_SIZE \
-    --local_epochs $LOCAL_EPOCHS \
-    --comm_rounds $COMM_ROUNDS \
-    --ratio_client $RATIO_CLIENT \
-    --lr $LEARNING_RATE \
-    --optimizer $OPTIMIZER \
-    --seed $SEED \
-    --partition $PARTITION \
-    --dir_beta $DIR_BETA \
-    --num_clients $NUM_CLIENTS 2>&1 | tee -a "$LOG_FILE"
-
-
-# 运行FedSPD算法
-{
-    echo ""
-    echo "========================================"
-    echo "  运行FedSPD算法"
-    echo "========================================"
-    echo ""
-} | tee -a "$LOG_FILE"
-
-python main.py \
-    --dataset $DATASET \
-    --strategy fedspd \
-    --batch_size $BATCH_SIZE \
-    --local_epochs $LOCAL_EPOCHS \
-    --comm_rounds $COMM_ROUNDS \
-    --ratio_client $RATIO_CLIENT \
-    --lr $LEARNING_RATE \
-    --optimizer $OPTIMIZER \
-    --seed $SEED \
-    --partition $PARTITION \
-    --dir_beta $DIR_BETA \
-    --num_clients $NUM_CLIENTS 2>&1 | tee -a "$LOG_FILE"
-
+    python main.py \
+        --dataset $DATASET \
+        --strategy $strategy \
+        --batch_size $BATCH_SIZE \
+        --local_epochs $LOCAL_EPOCHS \
+        --comm_rounds $COMM_ROUNDS \
+        --ratio_client $RATIO_CLIENT \
+        --lr $LEARNING_RATE \
+        --optimizer $OPTIMIZER \
+        --seed $SEED \
+        --partition $PARTITION \
+        --dir_beta $DIR_BETA \
+        --num_clients $NUM_CLIENTS 2>&1 | tee -a "$LOG_FILE"
+done
 
 # 生成对比结果图表
 {
