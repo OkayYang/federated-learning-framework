@@ -3,6 +3,8 @@ import glob
 import pickle
 import matplotlib.pyplot as plt
 import sys
+import numpy as np
+from scipy.signal import savgol_filter
 
 # 检查命令行参数，获取数据集名称
 if len(sys.argv) > 1:
@@ -48,151 +50,114 @@ if not strategies_data:
     print("没有成功加载任何历史数据")
     exit()
 
-# 为图例预留更多空间，增加高度为标题预留空间
-fig, axes = plt.subplots(2, 3, figsize=(24, 14))
+# 图表样式设置
+plt.style.use('default')
+plt.rcParams.update({
+    'font.size': 14,
+    'axes.labelsize': 16,
+    'axes.titlesize': 18,
+    'xtick.labelsize': 14,
+    'ytick.labelsize': 14,
+    'legend.fontsize': 14,
+    'lines.linewidth': 2.5,
+    'figure.dpi': 300
+})
 
-# 收集所有线条以便放到外部图例
-lines = []
-labels = []
+# 定义颜色和标记
+colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
+markers = ['o', 's', '^', 'D', 'v', 'p', '*', 'X']
 
-# 第一行：全局指标
-# 1. 全局训练损失子图
-for strategy, history in strategies_data.items():
-    epochs = range(1, len(history["global"]["train_loss"]) + 1)
-    line, = axes[0, 0].plot(epochs, history["global"]["train_loss"], marker="o", markersize=4)
-    # 只在第一个子图收集线条和标签
-    if strategy not in labels:
-        lines.append(line)
-        labels.append(strategy)
+# 平滑函数 - 使用Savitzky-Golay滤波器
+def smooth_data(data, window_length=5, polyorder=2):
+    # 确保数据点足够，否则不平滑
+    if len(data) < window_length:
+        return data
+    
+    # 使数据长度足够进行滤波
+    if len(data) % 2 == 0 and window_length % 2 == 1:
+        window_length = min(window_length, len(data) - 1)
+    
+    # 确保window_length是奇数且小于数据长度
+    window_length = min(window_length, len(data) - 1)
+    if window_length % 2 == 0:
+        window_length -= 1
+    
+    if window_length < 3:
+        return data
+    
+    try:
+        return savgol_filter(data, window_length, polyorder)
+    except Exception:
+        # 如果出错，返回原始数据
+        return data
 
-axes[0, 0].set_xlabel("Communication Rounds", fontsize=12)
-axes[0, 0].set_ylabel("Training Loss", fontsize=12)
-axes[0, 0].set_title("Global Training Loss", fontsize=14, pad=10)
-axes[0, 0].grid(True)
+# -------------- 绘制Global Test Accuracy图 --------------
+plt.figure(figsize=(12, 8))
 
-# 2. 全局测试损失子图
-for strategy, history in strategies_data.items():
-    epochs = range(1, len(history["global"]["test_loss"]) + 1)
-    axes[0, 1].plot(epochs, history["global"]["test_loss"], marker="s", markersize=4)
-
-axes[0, 1].set_xlabel("Communication Rounds", fontsize=12)
-axes[0, 1].set_ylabel("Test Loss", fontsize=12)
-axes[0, 1].set_title("Global Test Loss", fontsize=14, pad=10)
-axes[0, 1].grid(True)
-
-# 3. 全局测试准确率子图
-for strategy, history in strategies_data.items():
+for i, (strategy, history) in enumerate(strategies_data.items()):
     epochs = range(1, len(history["global"]["test_accuracy"]) + 1)
-    axes[0, 2].plot(epochs, history["global"]["test_accuracy"], marker="^", markersize=4)
+    
+    # 平滑数据
+    accuracy = smooth_data(history["global"]["test_accuracy"])
+    
+    plt.plot(
+        epochs, 
+        accuracy, 
+        color=colors[i % len(colors)],
+        marker=markers[i % len(markers)],
+        markersize=8,
+        markevery=max(1, len(epochs)//8),
+        linewidth=2.5,
+        label=strategy
+    )
 
-axes[0, 2].set_xlabel("Communication Rounds", fontsize=12)
-axes[0, 2].set_ylabel("Test Accuracy", fontsize=12)
-axes[0, 2].set_title("Global Test Accuracy", fontsize=14, pad=10)
-axes[0, 2].grid(True)
+plt.xlabel("Communication Rounds", fontsize=16)
+plt.ylabel("Test Accuracy", fontsize=16)
+plt.title(f"Global Test Accuracy - {dataset.upper()} Dataset", fontsize=18)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(loc='best', frameon=True)
 
-# 第二行：本地指标
-# 4. 本地训练损失子图
-for strategy, history in strategies_data.items():
-    epochs = range(1, len(history["local"]["train_loss"]) + 1)
-    axes[1, 0].plot(epochs, history["local"]["train_loss"], marker="o", markersize=4)
+# 自适应调整y轴范围
+global_min = min([min(history["global"]["test_accuracy"]) for history in strategies_data.values()])
+global_max = max([max(history["global"]["test_accuracy"]) for history in strategies_data.values()])
+plt.ylim(global_min - 0.02, global_max + 0.02)  # 添加少许边距
 
-axes[1, 0].set_xlabel("Communication Rounds", fontsize=12)
-axes[1, 0].set_ylabel("Training Loss", fontsize=12)
-axes[1, 0].set_title("Local Training Loss", fontsize=14, pad=10)
-axes[1, 0].grid(True)
+plt.tight_layout()
+plt.savefig(f"{compare_dir}/global_test_accuracy.png", dpi=300, bbox_inches="tight")
+plt.close()
 
-# 5. 本地测试损失子图
-for strategy, history in strategies_data.items():
-    epochs = range(1, len(history["local"]["test_loss"]) + 1)
-    axes[1, 1].plot(epochs, history["local"]["test_loss"], marker="s", markersize=4)
+# -------------- 绘制Local Test Accuracy图 --------------
+plt.figure(figsize=(12, 8))
 
-axes[1, 1].set_xlabel("Communication Rounds", fontsize=12)
-axes[1, 1].set_ylabel("Test Loss", fontsize=12)
-axes[1, 1].set_title("Local Test Loss", fontsize=14, pad=10)
-axes[1, 1].grid(True)
-
-# 6. 本地测试准确率子图
-for strategy, history in strategies_data.items():
+for i, (strategy, history) in enumerate(strategies_data.items()):
     epochs = range(1, len(history["local"]["test_accuracy"]) + 1)
-    axes[1, 2].plot(epochs, history["local"]["test_accuracy"], marker="^", markersize=4)
+    
+    # 平滑数据
+    accuracy = smooth_data(history["local"]["test_accuracy"])
+    
+    plt.plot(
+        epochs, 
+        accuracy, 
+        color=colors[i % len(colors)],
+        marker=markers[i % len(markers)],
+        markersize=8,
+        markevery=max(1, len(epochs)//8),
+        linewidth=2.5,
+        label=strategy
+    )
 
-axes[1, 2].set_xlabel("Communication Rounds", fontsize=12)
-axes[1, 2].set_ylabel("Test Accuracy", fontsize=12)
-axes[1, 2].set_title("Local Test Accuracy", fontsize=14, pad=10)
-axes[1, 2].grid(True)
+plt.xlabel("Communication Rounds", fontsize=16)
+plt.ylabel("Test Accuracy", fontsize=16)
+plt.title(f"Local Test Accuracy - {dataset.upper()} Dataset", fontsize=18)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(loc='best', frameon=True)
 
-# 添加整个图表的图例 - 放在右侧
-fig.legend(lines, labels, loc='center right', bbox_to_anchor=(1.0, 0.5), fontsize=12, 
-           title="Strategies", title_fontsize=14)
+# 自适应调整y轴范围
+local_min = min([min(history["local"]["test_accuracy"]) for history in strategies_data.values()])
+local_max = max([max(history["local"]["test_accuracy"]) for history in strategies_data.values()])
+plt.ylim(local_min - 0.02, local_max + 0.02)  # 添加少许边距
 
-# 调整布局，为右侧图例和顶部标题预留空间
-plt.tight_layout(rect=[0, 0, 0.85, 0.95])
+plt.tight_layout()
+plt.savefig(f"{compare_dir}/local_test_accuracy.png", dpi=300, bbox_inches="tight")
 
-# 添加整体标题，并提高它的位置以避免重叠
-plt.suptitle(f"Comparison of Different Federated Learning Strategies on {dataset.upper()} Dataset", 
-             fontsize=16, y=0.98)
-
-# 保存全部指标的对比图
-plt.savefig(f"{compare_dir}/strategies_full_comparison.png", dpi=300, bbox_inches="tight")
-
-# 再创建一个只有全局指标的图
-plt.figure(figsize=(24, 7))
-fig2, axes2 = plt.subplots(1, 3, figsize=(24, 7))
-
-# 为第二个图表收集线条
-lines2 = []
-labels2 = []
-
-# 1. 全局训练损失子图
-for strategy, history in strategies_data.items():
-    epochs = range(1, len(history["global"]["train_loss"]) + 1)
-    line, = axes2[0].plot(epochs, history["global"]["train_loss"], marker="o", markersize=4)
-    if strategy not in labels2:
-        lines2.append(line)
-        labels2.append(strategy)
-
-axes2[0].set_xlabel("Communication Rounds", fontsize=12)
-axes2[0].set_ylabel("Training Loss", fontsize=12)
-axes2[0].set_title("Global Training Loss", fontsize=14, pad=10)
-axes2[0].grid(True)
-
-# 2. 全局测试损失子图
-for strategy, history in strategies_data.items():
-    epochs = range(1, len(history["global"]["test_loss"]) + 1)
-    axes2[1].plot(epochs, history["global"]["test_loss"], marker="s", markersize=4)
-
-axes2[1].set_xlabel("Communication Rounds", fontsize=12)
-axes2[1].set_ylabel("Test Loss", fontsize=12)
-axes2[1].set_title("Global Test Loss", fontsize=14, pad=10)
-axes2[1].grid(True)
-
-# 3. 全局测试准确率子图
-for strategy, history in strategies_data.items():
-    epochs = range(1, len(history["global"]["test_accuracy"]) + 1)
-    axes2[2].plot(epochs, history["global"]["test_accuracy"], marker="^", markersize=4)
-
-axes2[2].set_xlabel("Communication Rounds", fontsize=12)
-axes2[2].set_ylabel("Test Accuracy", fontsize=12)
-axes2[2].set_title("Global Test Accuracy", fontsize=14, pad=10)
-axes2[2].grid(True)
-
-# 添加整个图表的图例 - 放在右侧
-fig2.legend(lines2, labels2, loc='center right', bbox_to_anchor=(1.0, 0.5), fontsize=12, 
-            title="Strategies", title_fontsize=14)
-
-# 调整布局，为右侧图例和顶部标题预留空间
-plt.tight_layout(rect=[0, 0, 0.85, 0.92])
-
-# 添加整体标题，并提高它的位置以避免重叠
-plt.suptitle(f"Global Metrics Comparison of Federated Learning Strategies on {dataset.upper()} Dataset", 
-             fontsize=16, y=0.98)
-
-# 保存只有全局指标的对比图
-plt.savefig(f"{compare_dir}/strategies_global_comparison.png", dpi=300, bbox_inches="tight")
-plt.close(fig2)
-
-# 显示第一个包含所有指标的图
-plt.figure(fig.number)
-plt.show()
-
-print(f"对比图表已保存到 {compare_dir} 目录")
+print(f"准确率对比图已保存到 {compare_dir} 目录")
