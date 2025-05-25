@@ -185,6 +185,14 @@ class CIFAR100Dataset(BaseDataset):
         # CIFAR100数据已经是正确的格式 (N x 3 x 32 x 32)，无需额外处理
 
 
+class TinyImageNetDataset(BaseDataset):
+    """Tiny ImageNet数据集类"""
+    def __init__(self, X, Y):
+        super(TinyImageNetDataset, self).__init__(X, Y)
+        
+        # Tiny ImageNet数据已经是正确的格式 (N x 3 x 64 x 64)，无需额外处理
+
+
 def partition_data_by_dirichlet(train_data, train_labels, test_data, test_labels, client_num, num_classes, beta=0.4, seed=42):
     """
     使用狄利克雷分布创建非IID数据分区。
@@ -741,4 +749,165 @@ def load_cifar100_dataset(client_list, transform=None, partition="noiid", beta=0
         train_data, train_labels, test_data, test_labels, 
         client_list, partition, CIFAR100Dataset, 
         num_classes=100, beta=beta, seed=seed
+    )
+
+
+def load_tinyimagenet_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42):
+    """
+    加载 Tiny ImageNet 数据集，并根据指定的划分方式分发给客户端。
+    
+    Tiny ImageNet 包含200个类别，每个类别500个训练图像和50个验证图像，
+    图像尺寸为64x64x3。
+    
+    Args:
+        client_list: 客户端列表
+        transform: 数据预处理转换
+        partition: 划分方式，"iid"、"noiid"或"dirichlet"
+        beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
+        seed: 随机种子
+        
+    Returns:
+        按客户端划分的训练集和测试集字典
+    """
+    # 初始化数据集加载
+    data_dir = init_dataset_loading("./data/tiny-imagenet-200/", transform, seed)
+    
+    # 检查数据集是否已下载，如果没有则自动下载
+    if not os.path.exists(os.path.join(data_dir, 'train')):
+        import subprocess
+        import sys
+        
+        print("Tiny ImageNet 数据集未找到，正在自动下载...")
+        
+        # 确保data目录存在
+        os.makedirs("./data", exist_ok=True)
+        
+        # 临时zip文件路径
+        zip_path = "./data/tiny-imagenet-200.zip"
+        
+        # 下载数据集
+        try:
+            print("正在下载 Tiny ImageNet 数据集...")
+            download_url = "http://cs231n.stanford.edu/tiny-imagenet-200.zip"
+            
+            # 使用requests下载
+            import requests
+            response = requests.get(download_url, stream=True)
+            total_size = int(response.headers.get('content-length', 0))
+            block_size = 1024  # 1 KB
+            
+            with open(zip_path, 'wb') as f:
+                for data in response.iter_content(block_size):
+                    f.write(data)
+                    # 简单的进度显示
+                    sys.stdout.write(f"\r下载进度: {os.path.getsize(zip_path)/total_size*100:.1f}% " if total_size > 0 else "\r下载中...")
+                    sys.stdout.flush()
+            
+            print("\n下载完成，正在解压...")
+            
+            # 解压数据集
+            import zipfile
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall("./data/")
+            
+            print("解压完成")
+            
+            # 可选：删除zip文件
+            os.remove(zip_path)
+            
+        except Exception as e:
+            print(f"下载或解压过程中出错: {e}")
+            print("请手动下载并解压数据集:")
+            print("1. 下载: wget http://cs231n.stanford.edu/tiny-imagenet-200.zip")
+            print("2. 解压: unzip tiny-imagenet-200.zip -d ./data/")
+            return None
+    
+    # 预处理：转换为张量
+    if transform is None:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        ])
+    
+    # 加载数据集
+    train_data = []
+    train_labels = []
+    test_data = []
+    test_labels = []
+    
+    # 类别名称到索引的映射
+    class_to_idx = {}
+    for i, class_dir in enumerate(sorted(os.listdir(os.path.join(data_dir, 'train')))):
+        class_to_idx[class_dir] = i
+    
+    # 加载训练数据
+    for class_dir in os.listdir(os.path.join(data_dir, 'train')):
+        class_idx = class_to_idx[class_dir]
+        img_dir = os.path.join(data_dir, 'train', class_dir, 'images')
+        
+        if os.path.isdir(img_dir):
+            for img_file in os.listdir(img_dir):
+                if img_file.endswith('.JPEG'):
+                    img_path = os.path.join(img_dir, img_file)
+                    try:
+                        # 使用PIL读取图像并转换为numpy数组
+                        from PIL import Image
+                        img = Image.open(img_path).convert('RGB')
+                        img = np.array(img.resize((64, 64)), dtype=np.float32)
+                        
+                        # 转换为CHW格式并归一化
+                        img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
+                        img = img / 127.5 - 1.0
+                        
+                        train_data.append(img)
+                        train_labels.append(class_idx)
+                    except Exception as e:
+                        print(f"Error loading {img_path}: {e}")
+                        continue
+    
+    # 加载验证数据 (用作测试集)
+    val_annotations_path = os.path.join(data_dir, 'val', 'val_annotations.txt')
+    if os.path.exists(val_annotations_path):
+        val_img_to_class = {}
+        with open(val_annotations_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split('\t')
+                val_img_to_class[parts[0]] = parts[1]
+        
+        val_img_dir = os.path.join(data_dir, 'val', 'images')
+        for img_file in os.listdir(val_img_dir):
+            if img_file in val_img_to_class:
+                class_name = val_img_to_class[img_file]
+                if class_name in class_to_idx:
+                    class_idx = class_to_idx[class_name]
+                    img_path = os.path.join(val_img_dir, img_file)
+                    try:
+                        # 使用PIL读取图像并转换为numpy数组
+                        from PIL import Image
+                        img = Image.open(img_path).convert('RGB')
+                        img = np.array(img.resize((64, 64)), dtype=np.float32)
+                        
+                        # 转换为CHW格式并归一化
+                        img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
+                        img = img / 127.5 - 1.0
+                        
+                        test_data.append(img)
+                        test_labels.append(class_idx)
+                    except Exception as e:
+                        print(f"Error loading {img_path}: {e}")
+                        continue
+    
+    # 转换为numpy数组
+    train_data = np.array(train_data, dtype=np.float32)
+    train_labels = np.array(train_labels, dtype=np.int64)
+    test_data = np.array(test_data, dtype=np.float32)
+    test_labels = np.array(test_labels, dtype=np.int64)
+    
+    print(f"加载了 {len(train_data)} 个训练样本，{len(test_data)} 个测试样本")
+    
+    # 使用统一的划分函数处理数据
+    return partition_dataset(
+        train_data, train_labels, test_data, test_labels, 
+        client_list, partition, TinyImageNetDataset, 
+        num_classes=200, beta=beta, seed=seed
     )

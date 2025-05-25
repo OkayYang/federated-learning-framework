@@ -280,4 +280,194 @@ class CIFAR100Net(nn.Module):
     def classify(self, hidden):
         """将隐藏表示分类到各个类别"""
         return self.classifier(hidden)
+
+# ResNet基本模块
+class BasicBlock(nn.Module):
+    expansion = 1
+    
+    def __init__(self, in_planes, planes, stride=1):
+        super(BasicBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion * planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion * planes)
+            )
+    
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
+
+class ResNet(nn.Module):
+    def __init__(self, block, num_blocks, num_classes=10):
+        super(ResNet, self).__init__()
+        self.in_planes = 64
+        
+        # 初始卷积层
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        
+        # ResNet层
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        
+        # 全连接分类层
+        self.linear = nn.Linear(512 * block.expansion, num_classes)
+        
+    def _make_layer(self, block, planes, num_blocks, stride):
+        strides = [stride] + [1] * (num_blocks - 1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes * block.expansion
+        return nn.Sequential(*layers)
+    
+    def forward(self, x, start_layer="raw", return_all=False):
+        if start_layer == "hidden":
+            # 假设输入是最后一个卷积层的特征
+            x = self.linear(x)
+            return x
+        elif start_layer == "classify":
+            # 直接进行分类
+            x = self.linear(x)
+            return x
+        else:
+            # 完整的前向传播
+            x = F.relu(self.bn1(self.conv1(x)))
+            x = self.layer1(x)
+            x = self.layer2(x)
+            x = self.layer3(x)
+            x = self.layer4(x)
+            x = F.avg_pool2d(x, 4)
+            features = x.view(x.size(0), -1)
+            logits = self.linear(features)
+            
+            if return_all:
+                return features, features, logits  # 为了保持一致性，返回相同的特征两次
+            
+            return logits
+    
+    def get_features(self, x):
+        """提取输入的特征表示"""
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = F.avg_pool2d(x, 4)
+        return x.view(x.size(0), -1)
+    
+    def get_hidden(self, features):
+        """将特征映射到隐藏空间 - 在ResNet中可以直接返回特征"""
+        return features
+    
+    def classify(self, hidden):
+        """将隐藏表示分类到各个类别"""
+        return self.linear(hidden)
+
+# ResNet18实现 - CIFAR10
+class ResNet18_CIFAR10(nn.Module):
+    def __init__(self):
+        super(ResNet18_CIFAR10, self).__init__()
+        self.model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes=10)
+        
+    def forward(self, x, start_layer="raw", return_all=False):
+        return self.model(x, start_layer, return_all)
+        
+    def get_features(self, x):
+        return self.model.get_features(x)
+    
+    def get_hidden(self, features):
+        return self.model.get_hidden(features)
+    
+    def classify(self, hidden):
+        return self.model.classify(hidden)
+
+# ResNet18实现 - CIFAR100
+class ResNet18_CIFAR100(nn.Module):
+    def __init__(self):
+        super(ResNet18_CIFAR100, self).__init__()
+        self.model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes=100)
+        
+    def forward(self, x, start_layer="raw", return_all=False):
+        return self.model(x, start_layer, return_all)
+        
+    def get_features(self, x):
+        return self.model.get_features(x)
+    
+    def get_hidden(self, features):
+        return self.model.get_hidden(features)
+    
+    def classify(self, hidden):
+        return self.model.classify(hidden)
+
+# ResNet18实现 - TinyImageNet
+class ResNet18_TinyImageNet(nn.Module):
+    def __init__(self):
+        super(ResNet18_TinyImageNet, self).__init__()
+        # ResNet模型基础架构与CIFAR类似，但需要调整输入大小和输出类别数
+        # Tiny ImageNet有200个类别，图像大小为64x64
+        
+        # 创建基础ResNet模型
+        self.model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes=200)
+        
+        # 由于Tiny ImageNet的图像尺寸是64x64，需要修改平均池化的大小
+        # 在前向传播中调整
+        
+    def forward(self, x, start_layer="raw", return_all=False):
+        if start_layer == "hidden":
+            # 从中间层开始
+            x = self.model.linear(x)
+            return x
+        elif start_layer == "classify":
+            # 直接分类
+            x = self.model.linear(x)
+            return x
+        else:
+            # 完整的前向传播
+            x = F.relu(self.model.bn1(self.model.conv1(x)))
+            x = self.model.layer1(x)
+            x = self.model.layer2(x)
+            x = self.model.layer3(x)
+            x = self.model.layer4(x)
+            
+            # 对于64x64的输入，经过多次下采样后尺寸为8x8
+            # 所以这里使用8x8的平均池化
+            x = F.avg_pool2d(x, 8)
+            
+            features = x.view(x.size(0), -1)
+            logits = self.model.linear(features)
+            
+            if return_all:
+                return features, features, logits
+            
+            return logits
+        
+    def get_features(self, x):
+        """提取输入的特征表示"""
+        x = F.relu(self.model.bn1(self.model.conv1(x)))
+        x = self.model.layer1(x)
+        x = self.model.layer2(x)
+        x = self.model.layer3(x)
+        x = self.model.layer4(x)
+        x = F.avg_pool2d(x, 8)  # 对于64x64的输入使用8x8池化
+        return x.view(x.size(0), -1)
+    
+    def get_hidden(self, features):
+        """将特征映射到隐藏空间 - 在ResNet中可以直接返回特征"""
+        return features
+    
+    def classify(self, hidden):
+        """将隐藏表示分类到各个类别"""
+        return self.model.linear(hidden)
         

@@ -17,7 +17,7 @@ from fl.data import datasets
 # 导入必要的库和模块
 from fl.client.fl_base import ModelConfig
 from fl.server.fl_server import FLServer
-from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet
+from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet, ResNet18_CIFAR10, ResNet18_CIFAR100, ResNet18_TinyImageNet
 from fl.model.generator import Generator
 from fl.utils import (
     optim_wrapper,
@@ -76,14 +76,20 @@ def train_federated_model(args):
     elif args.dataset.lower() == 'cifar10':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar10_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
-        model_fn = CIFAR10Net
+        model_fn = ResNet18_CIFAR10
         num_classes = 10
-        feature_dim = 256
+        feature_dim = 512
     elif args.dataset.lower() == 'cifar100':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar100_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
-        model_fn = CIFAR100Net
+        model_fn = ResNet18_CIFAR100
         num_classes = 100
+        feature_dim = 512
+    elif args.dataset.lower() == 'tinyimagenet':
+        client_list = ["client_" + str(i) for i in range(args.num_clients)]
+        dataset_dict = datasets.load_tinyimagenet_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
+        model_fn = ResNet18_TinyImageNet
+        num_classes = 200
         feature_dim = 512
     else:
         raise ValueError(f"不支持的数据集: {args.dataset}")
@@ -190,14 +196,14 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
 
      # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='fedspd',
+    parser.add_argument('--strategy', type=str, default='fedavg',
                         choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone'],
                         help='联邦学习策略')
     
     # 数据集相关参数
-    parser.add_argument('--dataset', type=str, default='femnist', 
-                        choices=['femnist', 'mnist', 'cifar10', 'cifar100'],
-                        help='要使用的数据集 (femnist, mnist, cifar10, cifar100)')
+    parser.add_argument('--dataset', type=str, default='tinyimagenet', 
+                        choices=['femnist', 'mnist', 'cifar10', 'cifar100', 'tinyimagenet'],
+                        help='要使用的数据集 (femnist, mnist, cifar10, cifar100, tinyimagenet)')
     parser.add_argument('--partition', type=str, default='dirichlet', choices=['iid', 'noiid', 'dirichlet'],
                         help='数据分区方式 (iid 或 noiid 或 dirichlet)')
     parser.add_argument('--num_clients', type=int, default=10,
