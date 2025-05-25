@@ -50,7 +50,7 @@ echo "选择的算法: $ALGORITHMS"
 BATCH_SIZE=64    # 批处理大小
 LOCAL_EPOCHS=10  # 本地训练轮数
 COMM_ROUNDS=30  # 通信轮数
-RATIO_CLIENT=0.5  # 每轮参与训练的客户端比例
+RATIO_CLIENT=0.8  # 每轮参与训练的客户端比例
 LEARNING_RATE=0.01  # 学习率
 OPTIMIZER="adam"    # 优化器: adam, sgd
 SEED=42             # 随机种子，保证实验可重复性
