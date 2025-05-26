@@ -69,25 +69,25 @@ def train_federated_model(args):
         feature_dim = 128
     elif args.dataset.lower() == 'mnist':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
-        dataset_dict = datasets.load_mnist_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
+        dataset_dict = datasets.load_mnist_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
         model_fn = MNISTNet
         num_classes = 10
         feature_dim = 128
     elif args.dataset.lower() == 'cifar10':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
-        dataset_dict = datasets.load_cifar10_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
+        dataset_dict = datasets.load_cifar10_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
         model_fn = ResNet18_CIFAR10
         num_classes = 10
         feature_dim = 512
     elif args.dataset.lower() == 'cifar100':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
-        dataset_dict = datasets.load_cifar100_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
+        dataset_dict = datasets.load_cifar100_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
         model_fn = ResNet18_CIFAR100
         num_classes = 100
         feature_dim = 512
     elif args.dataset.lower() == 'tinyimagenet':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
-        dataset_dict = datasets.load_tinyimagenet_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed)
+        dataset_dict = datasets.load_tinyimagenet_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
         model_fn = ResNet18_TinyImageNet
         num_classes = 200
         feature_dim = 512
@@ -196,7 +196,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
 
      # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='fedavg',
+    parser.add_argument('--strategy', type=str, default='fedgen',
                         choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone'],
                         help='联邦学习策略')
     
@@ -210,6 +210,8 @@ def parse_arguments():
                         help='当使用MNIST/CIFAR数据集时的客户端数量')
     parser.add_argument('--dir_beta', type=float, default=0.3,
                         help='当使用dirichlet划分方式时的狄利克雷分布的参数')
+    parser.add_argument('--data_fraction', type=float, default=1,
+                        help='数据集采样比例')
     
     # 训练相关参数
     parser.add_argument('--batch_size', type=int, default=64, 

@@ -591,7 +591,7 @@ def partition_dataset(train_data, train_labels, test_data, test_labels, client_l
     return datasets_dict
 
 
-def load_mnist_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42):
+def load_mnist_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42, data_fraction=1.0):
     """
     加载 MNIST 数据集，并根据指定的划分方式分发给客户端。
     
@@ -601,6 +601,7 @@ def load_mnist_dataset(client_list, transform=None, partition="noiid", beta=0.4,
         partition: 划分方式，"iid"、"noiid"或"dirichlet"
         beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
         seed: 随机种子
+        data_fraction: 使用的数据比例，范围(0,1]，1表示全量数据
         
     Returns:
         按客户端划分的训练集和测试集字典
@@ -628,6 +629,27 @@ def load_mnist_dataset(client_list, transform=None, partition="noiid", beta=0.4,
     test_data = test_dataset.data.numpy()
     test_labels = test_dataset.targets.numpy()
     
+    # 控制数据量
+    if data_fraction < 1.0:
+        # 设置随机种子确保可重复性
+        np.random.seed(seed)
+        
+        # 计算保留的样本数
+        train_samples = int(len(train_data) * data_fraction)
+        test_samples = int(len(test_data) * data_fraction)
+        
+        # 随机选择样本
+        train_indices = np.random.choice(len(train_data), train_samples, replace=False)
+        test_indices = np.random.choice(len(test_data), test_samples, replace=False)
+        
+        # 筛选数据
+        train_data = train_data[train_indices]
+        train_labels = train_labels[train_indices]
+        test_data = test_data[test_indices]
+        test_labels = test_labels[test_indices]
+        
+        print(f"使用 {data_fraction:.2f} 比例的MNIST数据: {len(train_data)}个训练样本, {len(test_data)}个测试样本")
+    
     # 添加通道维度并转换为float32
     train_data = train_data.reshape(-1, 1, 28, 28).astype(np.float32)
     test_data = test_data.reshape(-1, 1, 28, 28).astype(np.float32)
@@ -644,7 +666,7 @@ def load_mnist_dataset(client_list, transform=None, partition="noiid", beta=0.4,
     )
 
 
-def load_cifar10_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42):
+def load_cifar10_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42, data_fraction=1.0):
     """
     加载 CIFAR10 数据集，并根据指定的划分方式分发给客户端。
     
@@ -654,6 +676,7 @@ def load_cifar10_dataset(client_list, transform=None, partition="noiid", beta=0.
         partition: 划分方式，"iid"、"noiid"或"dirichlet"
         beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
         seed: 随机种子
+        data_fraction: 使用的数据比例，范围(0,1]，1表示全量数据
         
     Returns:
         按客户端划分的训练集和测试集字典
@@ -682,6 +705,27 @@ def load_cifar10_dataset(client_list, transform=None, partition="noiid", beta=0.
     test_data = test_dataset.data  # 已经是numpy数组格式 (N, 32, 32, 3)
     test_labels = np.array(test_dataset.targets)
     
+    # 控制数据量
+    if data_fraction < 1.0:
+        # 设置随机种子确保可重复性
+        np.random.seed(seed)
+        
+        # 计算保留的样本数
+        train_samples = int(len(train_data) * data_fraction)
+        test_samples = int(len(test_data) * data_fraction)
+        
+        # 随机选择样本
+        train_indices = np.random.choice(len(train_data), train_samples, replace=False)
+        test_indices = np.random.choice(len(test_data), test_samples, replace=False)
+        
+        # 筛选数据
+        train_data = train_data[train_indices]
+        train_labels = train_labels[train_indices]
+        test_data = test_data[test_indices]
+        test_labels = test_labels[test_indices]
+        
+        print(f"使用 {data_fraction:.2f} 比例的CIFAR10数据: {len(train_data)}个训练样本, {len(test_data)}个测试样本")
+    
     # CIFAR10图像转换 - 从(N, 32, 32, 3)变换为(N, 3, 32, 32)
     train_data = np.transpose(train_data, (0, 3, 1, 2)).astype(np.float32)
     test_data = np.transpose(test_data, (0, 3, 1, 2)).astype(np.float32)
@@ -698,7 +742,7 @@ def load_cifar10_dataset(client_list, transform=None, partition="noiid", beta=0.
     )
 
 
-def load_cifar100_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42):
+def load_cifar100_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42, data_fraction=1.0):
     """
     加载 CIFAR100 数据集，并根据指定的划分方式分发给客户端。
     
@@ -708,6 +752,7 @@ def load_cifar100_dataset(client_list, transform=None, partition="noiid", beta=0
         partition: 划分方式，"iid"、"noiid"或"dirichlet"
         beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
         seed: 随机种子
+        data_fraction: 使用的数据比例，范围(0,1]，1表示全量数据
         
     Returns:
         按客户端划分的训练集和测试集字典
@@ -736,6 +781,27 @@ def load_cifar100_dataset(client_list, transform=None, partition="noiid", beta=0
     test_data = test_dataset.data  # 已经是numpy数组格式 (N, 32, 32, 3)
     test_labels = np.array(test_dataset.targets)
     
+    # 控制数据量
+    if data_fraction < 1.0:
+        # 设置随机种子确保可重复性
+        np.random.seed(seed)
+        
+        # 计算保留的样本数
+        train_samples = int(len(train_data) * data_fraction)
+        test_samples = int(len(test_data) * data_fraction)
+        
+        # 随机选择样本
+        train_indices = np.random.choice(len(train_data), train_samples, replace=False)
+        test_indices = np.random.choice(len(test_data), test_samples, replace=False)
+        
+        # 筛选数据
+        train_data = train_data[train_indices]
+        train_labels = train_labels[train_indices]
+        test_data = test_data[test_indices]
+        test_labels = test_labels[test_indices]
+        
+        print(f"使用 {data_fraction:.2f} 比例的CIFAR100数据: {len(train_data)}个训练样本, {len(test_data)}个测试样本")
+    
     # CIFAR100图像转换 - 从(N, 32, 32, 3)变换为(N, 3, 32, 32)
     train_data = np.transpose(train_data, (0, 3, 1, 2)).astype(np.float32)
     test_data = np.transpose(test_data, (0, 3, 1, 2)).astype(np.float32)
@@ -752,7 +818,7 @@ def load_cifar100_dataset(client_list, transform=None, partition="noiid", beta=0
     )
 
 
-def load_tinyimagenet_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42):
+def load_tinyimagenet_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42, data_fraction=1.0):
     """
     加载 Tiny ImageNet 数据集，并根据指定的划分方式分发给客户端。
     
@@ -765,6 +831,7 @@ def load_tinyimagenet_dataset(client_list, transform=None, partition="noiid", be
         partition: 划分方式，"iid"、"noiid"或"dirichlet"
         beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
         seed: 随机种子
+        data_fraction: 使用的数据比例，范围(0,1]，1表示全量数据
         
     Returns:
         按客户端划分的训练集和测试集字典
@@ -841,61 +908,100 @@ def load_tinyimagenet_dataset(client_list, transform=None, partition="noiid", be
         class_to_idx[class_dir] = i
     
     # 加载训练数据
+    class_samples = {}  # 记录每个类别加载的样本数
+    
+    # 控制每个类别的样本数
+    max_samples_per_class = None
+    if data_fraction < 1.0:
+        # 每个类别默认有500个训练样本
+        max_samples_per_class = int(500 * data_fraction)
+        print(f"每个类别最多加载 {max_samples_per_class} 个训练样本 (总共 {max_samples_per_class * len(class_to_idx)} 个)")
+    
     for class_dir in os.listdir(os.path.join(data_dir, 'train')):
         class_idx = class_to_idx[class_dir]
         img_dir = os.path.join(data_dir, 'train', class_dir, 'images')
+        class_samples[class_idx] = 0
         
         if os.path.isdir(img_dir):
-            for img_file in os.listdir(img_dir):
-                if img_file.endswith('.JPEG'):
-                    img_path = os.path.join(img_dir, img_file)
-                    try:
-                        # 使用PIL读取图像并转换为numpy数组
-                        from PIL import Image
-                        img = Image.open(img_path).convert('RGB')
-                        img = np.array(img.resize((64, 64)), dtype=np.float32)
-                        
-                        # 转换为CHW格式并归一化
-                        img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
-                        img = img / 127.5 - 1.0
-                        
-                        train_data.append(img)
-                        train_labels.append(class_idx)
-                    except Exception as e:
-                        print(f"Error loading {img_path}: {e}")
-                        continue
+            # 获取所有图像文件
+            img_files = [f for f in os.listdir(img_dir) if f.endswith('.JPEG')]
+            
+            # 如果需要限制数据量，随机选择部分图像
+            if max_samples_per_class is not None and len(img_files) > max_samples_per_class:
+                np.random.seed(seed + class_idx)  # 为每个类别使用不同的种子
+                img_files = np.random.choice(img_files, max_samples_per_class, replace=False)
+            
+            for img_file in img_files:
+                img_path = os.path.join(img_dir, img_file)
+                try:
+                    # 使用PIL读取图像并转换为numpy数组
+                    from PIL import Image
+                    img = Image.open(img_path).convert('RGB')
+                    img = np.array(img.resize((64, 64)), dtype=np.float32)
+                    
+                    # 转换为CHW格式并归一化
+                    img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
+                    img = img / 127.5 - 1.0
+                    
+                    train_data.append(img)
+                    train_labels.append(class_idx)
+                    class_samples[class_idx] += 1
+                except Exception as e:
+                    print(f"Error loading {img_path}: {e}")
+                    continue
     
     # 加载验证数据 (用作测试集)
     val_annotations_path = os.path.join(data_dir, 'val', 'val_annotations.txt')
     if os.path.exists(val_annotations_path):
+        # 为每个类别记录测试样本数
+        test_class_samples = {k: 0 for k in class_to_idx.values()}
+        max_test_samples_per_class = None
+        
+        if data_fraction < 1.0:
+            # 每个类别默认有50个验证样本
+            max_test_samples_per_class = int(50 * data_fraction)
+        
+        # 读取验证集标注
         val_img_to_class = {}
         with open(val_annotations_path, 'r') as f:
             for line in f:
                 parts = line.strip().split('\t')
                 val_img_to_class[parts[0]] = parts[1]
         
+        # 按类别组织验证图像
+        class_val_images = {k: [] for k in class_to_idx.keys()}
+        for img_file, class_name in val_img_to_class.items():
+            if class_name in class_to_idx:
+                class_val_images[class_name].append(img_file)
+        
+        # 加载每个类别的部分验证图像
         val_img_dir = os.path.join(data_dir, 'val', 'images')
-        for img_file in os.listdir(val_img_dir):
-            if img_file in val_img_to_class:
-                class_name = val_img_to_class[img_file]
-                if class_name in class_to_idx:
-                    class_idx = class_to_idx[class_name]
-                    img_path = os.path.join(val_img_dir, img_file)
-                    try:
-                        # 使用PIL读取图像并转换为numpy数组
-                        from PIL import Image
-                        img = Image.open(img_path).convert('RGB')
-                        img = np.array(img.resize((64, 64)), dtype=np.float32)
-                        
-                        # 转换为CHW格式并归一化
-                        img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
-                        img = img / 127.5 - 1.0
-                        
-                        test_data.append(img)
-                        test_labels.append(class_idx)
-                    except Exception as e:
-                        print(f"Error loading {img_path}: {e}")
-                        continue
+        for class_name, img_files in class_val_images.items():
+            class_idx = class_to_idx[class_name]
+            
+            # 如果需要限制数据量，随机选择部分图像
+            if max_test_samples_per_class is not None and len(img_files) > max_test_samples_per_class:
+                np.random.seed(seed + class_idx + 10000)  # 为每个类别使用不同的种子
+                img_files = np.random.choice(img_files, max_test_samples_per_class, replace=False)
+            
+            for img_file in img_files:
+                img_path = os.path.join(val_img_dir, img_file)
+                try:
+                    # 使用PIL读取图像并转换为numpy数组
+                    from PIL import Image
+                    img = Image.open(img_path).convert('RGB')
+                    img = np.array(img.resize((64, 64)), dtype=np.float32)
+                    
+                    # 转换为CHW格式并归一化
+                    img = np.transpose(img, (2, 0, 1))  # HWC -> CHW
+                    img = img / 127.5 - 1.0
+                    
+                    test_data.append(img)
+                    test_labels.append(class_idx)
+                    test_class_samples[class_idx] += 1
+                except Exception as e:
+                    print(f"Error loading {img_path}: {e}")
+                    continue
     
     # 转换为numpy数组
     train_data = np.array(train_data, dtype=np.float32)
@@ -904,6 +1010,8 @@ def load_tinyimagenet_dataset(client_list, transform=None, partition="noiid", be
     test_labels = np.array(test_labels, dtype=np.int64)
     
     print(f"加载了 {len(train_data)} 个训练样本，{len(test_data)} 个测试样本")
+    if data_fraction < 1.0:
+        print(f"使用 {data_fraction:.2f} 比例的TinyImageNet数据")
     
     # 使用统一的划分函数处理数据
     return partition_dataset(
