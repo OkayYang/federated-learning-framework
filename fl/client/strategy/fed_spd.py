@@ -37,13 +37,8 @@ class FedSPD(BaseClient):
         :param global_logits: 服务器聚合的类别logits {class_id: logits}
         """
         # 1. 加载服务器传来的全局模型权重（仅分类层）
-        # if weights is not None:
-        #     state_dict = self.model.state_dict()
-        #     keys = list(state_dict.keys())
-        #     # 只更新最后一层(分类层)的权重和偏置
-        #     state_dict[keys[-2]] = torch.Tensor(weights[-2]).to(self.device)  # 分类层权重
-        #     state_dict[keys[-1]] = torch.Tensor(weights[-1]).to(self.device)  # 分类层偏置
-        #     self.model.load_state_dict(state_dict)
+        if weights is not None:
+            self.update_weights(weights)
 
         # 2. 开始本地训练
         self.model.train()

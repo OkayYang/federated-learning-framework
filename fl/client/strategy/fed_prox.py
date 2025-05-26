@@ -34,21 +34,6 @@ class FedProx(BaseClient):
         for i in range(l1):
             proximal_term += (torch.tensor(local_weights[i]) - global_weights[i]).norm(2).pow(2)
         return proximal_term/2.0    
-    def compute_proximal_term(self, local_model, global_model):
-        """
-        计算近端项（proximal term），用于FedProx算法
-        正确的实现：L2范数平方的和，而不是直接用PyTorch的norm计算
-        :param local_model: 当前本地模型参数
-        :param global_model: 全局模型参数
-        :return: 近端项损失
-        """
-        proximal_term = 0.0
-        # 使用命名参数而非索引，更健壮
-        for (name, local_param), (_, global_param) in zip(local_model.named_parameters(), global_model.named_parameters()):
-            # 按照FedProx论文，计算每层参数之间的L2距离平方
-            proximal_term += (local_param - global_param).norm(2).pow(2)
-            
-        return proximal_term / 2.0  # 除以2是标准的L2正则形式
         
     def local_train(self, sync_round: int, weights=None):
         """

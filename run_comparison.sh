@@ -58,6 +58,7 @@ PARTITION="dirichlet"   # 数据分区方式: iid, noiid, dirichlet
 NUM_CLIENTS=20      # 客户端数量
 DIR_BETA=0.2       # Dirichlet分布参数，仅在PARTITION="dirichlet"时使用
 
+
 # 创建日志目录
 LOG_DIR="./logs/${DATASET}"
 mkdir -p "$LOG_DIR"

@@ -62,14 +62,15 @@ class FedGen(BaseClient):
         """
         # 1. 加载预测层权重
         if weights is not None:
+            self.update_weights(weights)
             # 获取当前模型的state_dict
-            state_dict = self.model.state_dict()
-            keys = list(state_dict.keys())
-            # 只更新最后一层(分类层)的权重和偏置
-            state_dict[keys[-2]] = torch.Tensor(weights[-2]).to(self.device)  # 分类层权重
-            state_dict[keys[-1]] = torch.Tensor(weights[-1]).to(self.device)  # 分类层偏置
-            # 更新模型权重
-            self.model.load_state_dict(state_dict)
+            # state_dict = self.model.state_dict()
+            # keys = list(state_dict.keys())
+            # # 只更新最后一层(分类层)的权重和偏置
+            # state_dict[keys[-2]] = torch.Tensor(weights[-2]).to(self.device)  # 分类层权重
+            # state_dict[keys[-1]] = torch.Tensor(weights[-1]).to(self.device)  # 分类层偏置
+            # # 更新模型权重
+            # self.model.load_state_dict(state_dict)
         
         # 2. 更新生成器模型
         if generator_weights is not None:
