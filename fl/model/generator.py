@@ -6,9 +6,9 @@ class Generator(nn.Module):
     """
     生成器模型，用于生成合成数据样本
     """
-    def __init__(self, feature_dim, num_classes,latent_dim=64, hidden_dim=256):
+    def __init__(self, feature_dim, num_classes,noise_dim=64, hidden_dim=256):
         super(Generator, self).__init__()
-        self.latent_dim = latent_dim
+        self.noise_dim = noise_dim
         self.feature_dim = feature_dim
         self.num_classes = num_classes
         self.hidden_dim = hidden_dim
@@ -19,7 +19,7 @@ class Generator(nn.Module):
 
         # 生成器网络
         self.generator = nn.Sequential(
-            nn.Linear(latent_dim + hidden_dim, hidden_dim),
+            nn.Linear(noise_dim + hidden_dim, hidden_dim),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(hidden_dim, hidden_dim),
             nn.LeakyReLU(0.2, inplace=True),
@@ -32,26 +32,27 @@ class Generator(nn.Module):
         self.ensemble_alpha = 1
         self.ensemble_beta = 0
         self.ensemble_eta = 1
-        self.optimizer = torch.optim.Adam(self.generator.parameters(), lr=self.train_lr)
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.train_lr)
         self.kd_loss = nn.KLDivLoss(reduction='batchmean')
         self.loss_fn = nn.CrossEntropyLoss()
         self.diversity_loss = DiversityLoss(metric='l1')
 
-    def forward(self, z, labels):
+    
+    def forward(self,labels):
         """
         输入噪声向量和标签，输出合成特征
         """
+        z = torch.randn(labels.size(0), self.noise_dim).to(self.device)
         # 将标签转换为嵌入向量
         label_embedding = self.label_embedding(labels)
         # 将噪声向量和标签嵌入连接起来
         concat_input = torch.cat([z, label_embedding], dim=1)
         # 生成特征
         features = self.generator(concat_input)
-        
-        # 裁剪特征值，防止极端值
-        features = torch.clamp(features, -10.0, 10.0)
-        
-        return features
+        # 使用tanh激活函数替代硬裁剪，提供更平滑的梯度
+        features = torch.tanh(features) * 5.0  # 将输出范围限制在[-5, 5]
+
+        return z,features
 
     def get_weights(self, return_numpy=False):
         if not return_numpy:

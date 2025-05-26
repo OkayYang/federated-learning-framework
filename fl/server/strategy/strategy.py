@@ -222,10 +222,9 @@ class FedGenStrategy(AggregationStrategy):
             sampled_labels = torch.LongTensor(sampled_labels).to(self.device)
             
             # 生成随机噪声
-            eps = torch.randn(self.global_generator.train_batch_size, self.global_generator.latent_dim).to(self.device)
             
             # 生成合成数据
-            synthetic_features = self.global_generator(eps, sampled_labels)
+            eps,synthetic_features = self.global_generator(sampled_labels)
             diversity_loss = self.global_generator.diversity_loss(eps, synthetic_features)
             
             # 教师损失

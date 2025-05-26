@@ -17,8 +17,6 @@ class FedGen(BaseClient):
         
         self.feature_dim = kwargs.get('feature_dim')
         self.num_classes = kwargs.get('num_classes')  
-        self.latent_dim = kwargs.get('latent_dim')
-        self.hidden_dim = kwargs.get('hidden_dim')
         if self.num_classes is None or self.feature_dim is None:
             raise ValueError("num_classes and feature_dim must be provided")
         
@@ -26,14 +24,12 @@ class FedGen(BaseClient):
         # 生成器超参数
         self.alpha = kwargs.get('alpha', 10)  # 知识蒸馏损失的权重
         self.beta = kwargs.get('beta', 10)   # 生成器损失的权重
-        self.temperature = kwargs.get('temperature', 2.0)  # 温度用于软化概率分布
+        self.temperature = kwargs.get('temperature', 1.0)  # 温度用于软化概率分布
         self.init_generator = self.kwargs.get('generator_model')
         # 初始化生成器
         self.generator = Generator(
             feature_dim=self.feature_dim,
             num_classes=self.num_classes,
-            latent_dim=self.latent_dim,
-            hidden_dim=self.hidden_dim
         ).to(self.device)
         self.generator.update_weights(self.init_generator.get_weights(return_numpy=True))
 
@@ -107,14 +103,10 @@ class FedGen(BaseClient):
                     # 计算分类损失
                     ce_loss = self.loss(logits, target)
 
-                   
-                    y_input = target.clone().detach()
-                    batch_size = len(y_input)
                     # 生成噪声
-                    z = torch.randn(batch_size, self.latent_dim).to(self.device)
                     # 生成特征
                     with torch.no_grad():
-                        gen_features = self.generator(z, target)
+                        eps,gen_features = self.generator(target)
                     
                     # 通过模型的分类层计算生成特征的预测
                     gen_logits = self.model(gen_features,start_layer="classify")
@@ -124,11 +116,11 @@ class FedGen(BaseClient):
                     
                     # 随机生成样本
                     sampled_labels = np.random.choice(
-                        self.num_classes, batch_size
+                        self.num_classes, self.generator.train_batch_size
                     )
                     sampled_labels = torch.LongTensor(sampled_labels).to(self.device)
                     with torch.no_grad():  
-                        sampled_features = self.generator(z, sampled_labels)
+                        eps,sampled_features = self.generator(sampled_labels)
                     sampled_logits = self.model(sampled_features,start_layer="classify")
                     # 计算生成样本的分类损失
                     teacher_loss = self.loss(sampled_logits, sampled_labels)

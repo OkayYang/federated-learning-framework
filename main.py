@@ -132,17 +132,11 @@ def train_federated_model(args):
     
 
     if args.strategy.lower() == 'fedgen':
-        latent_dim = 64
-        hidden_dim= 256
         strategy_params['feature_dim'] = feature_dim
-        strategy_params['latent_dim'] = latent_dim
-        strategy_params['hidden_dim'] = hidden_dim
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         generator = Generator(
             feature_dim=feature_dim,
             num_classes=num_classes,
-            latent_dim=latent_dim,
-            hidden_dim=hidden_dim
         ).to(device)
         strategy_params['generator_model'] = generator
     
