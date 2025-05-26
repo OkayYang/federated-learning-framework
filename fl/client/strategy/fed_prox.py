@@ -20,7 +20,20 @@ class FedProx(BaseClient):
         self.mu = kwargs.get('mu', 0.01)
         # 保存全局模型副本，避免重复转换和提高效率
         self.global_model = None
-        
+
+    def proximal_term(self, local_weights, global_weights):
+        """
+        计算近端项（proximal term），用于FedProx算法
+        :param w1: 全局模型权重列表
+        :param w2: 本地模型权重列表
+        :return: 近端项损失
+        """
+        l1 = len(local_weights)
+        assert l1 == len(global_weights), "weights should be same in the shape"
+        proximal_term = 0
+        for i in range(l1):
+            proximal_term += (torch.tensor(local_weights[i]) - global_weights[i]).norm(2).pow(2)
+        return proximal_term/2.0    
     def compute_proximal_term(self, local_model, global_model):
         """
         计算近端项（proximal term），用于FedProx算法
@@ -84,8 +97,8 @@ class FedProx(BaseClient):
                     
                     # 计算近端正则化项
                     prox_loss = 0
-                    if self.global_model is not None:
-                        prox_loss = self.mu * self.compute_proximal_term(self.model, self.global_model)
+                    if weights is not None:
+                        prox_loss = self.mu * self.proximal_term(self.get_weights(return_numpy=True), weights)
                     
                     # 总损失 = 任务损失 + 近端正则化项
                     loss = ce_loss + prox_loss
