@@ -18,8 +18,6 @@ class FedProx(BaseClient):
         super().__init__(*args, **kwargs)
         # mu是关键超参数，控制正则化强度
         self.mu = kwargs.get('mu', 0.01)
-        # 保存全局模型副本，避免重复转换和提高效率
-        self.global_model = None
 
     def proximal_term(self, local_weights, global_weights):
         """
@@ -45,11 +43,6 @@ class FedProx(BaseClient):
         if weights is not None:
             # 加载服务器传来的全局模型权重
             self.update_weights(weights)
-            # 创建全局模型副本，用于近端正则化
-            self.global_model = copy.deepcopy(self.model)
-            self.global_model.eval()  # 设为评估模式，节省显存
-            for param in self.global_model.parameters():
-                param.requires_grad = False
                 
         # 确认global_model是否存在
         if self.global_model is None:
