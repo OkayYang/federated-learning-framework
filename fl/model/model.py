@@ -280,7 +280,125 @@ class CIFAR100Net(nn.Module):
     def classify(self, hidden):
         """将隐藏表示分类到各个类别"""
         return self.classifier(hidden)
-
+class TinyImageNetNet(nn.Module):
+    """
+    TinyImageNet网络模型，模块化设计为三个部分：
+    1. 头部特征提取层 (Backbone)：卷积层，提取图像特征
+    2. 映射层 (Mapping Layer)：将特征映射到隐藏空间
+    3. 输出层 (Output Layer)：分类层，输出类别概率
+    
+    TinyImageNet包含200个类别，图像尺寸为64x64
+    """
+    def __init__(self):
+        super(TinyImageNetNet, self).__init__()
+        # 头部特征提取层 - 使用更深的卷积网络处理TinyImageNet的64x64彩色图像
+        self.backbone = nn.Sequential(
+            # 第一个卷积块
+            nn.Conv2d(3, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 32x32
+            
+            # 第二个卷积块
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 16x16
+            
+            # 第三个卷积块
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 8x8
+            
+            # 第四个卷积块 - 添加额外层以处理更大的输入尺寸
+            nn.Conv2d(256, 512, kernel_size=3, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(512, 512, kernel_size=3, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 4x4
+        )
+        
+        # 计算特征维度
+        self.feature_dim = 512 * 4 * 4  # 4次下采样后，64x64 -> 4x4
+        
+        # 映射层 - 将卷积特征映射到较低维的隐藏空间
+        self.mapping = nn.Sequential(
+            nn.Linear(self.feature_dim, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(1024, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+        )
+        
+        # 输出层 - 将隐藏空间映射到类别空间
+        self.classifier = nn.Linear(512, 200)  # TinyImageNet有200个类别
+    
+    def forward(self, x, start_layer="raw", return_all=False):
+        """
+        前向传播函数
+        
+        Args:
+            x: 输入数据
+            start_layer: 是否从映射层开始（用于fedgen等）
+            return_all: 是否返回特征（用于对比学习等）
+            
+        Returns:
+            模型输出
+        """
+        if start_layer == "hidden":
+            # 从映射层开始，适用于生成的特征输入
+            hidden = self.mapping(x)
+            # 通过输出层获得类别预测
+            logits = self.classifier(hidden)
+            return logits
+        elif start_layer == "classify":
+            logits = self.classifier(x)
+            return logits
+        else:
+            # 从头部开始，提取特征
+            x = self.backbone(x)
+            features = x.view(x.size(0), -1)
+        
+            # 通过映射层
+            hidden = self.mapping(features)
+            
+            # 通过输出层获得类别预测
+            logits = self.classifier(hidden)
+            
+            if return_all:
+                # 返回中间特征表示（用于对比学习、特征可视化等）
+                return features, hidden, logits
+            
+            return logits
+        
+    def get_features(self, x):
+        """提取输入的特征表示"""
+        x = self.backbone(x)
+        return x.view(x.size(0), -1)
+    
+    def get_hidden(self, features):
+        """将特征映射到隐藏空间"""
+        return self.mapping(features)
+    
+    def classify(self, hidden):
+        """将隐藏表示分类到各个类别"""
+        return self.classifier(hidden)
+        
 # ResNet基本模块
 class BasicBlock(nn.Module):
     expansion = 1
@@ -470,4 +588,4 @@ class ResNet18_TinyImageNet(nn.Module):
     def classify(self, hidden):
         """将隐藏表示分类到各个类别"""
         return self.model.linear(hidden)
-        
+

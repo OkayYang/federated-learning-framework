@@ -78,19 +78,19 @@ def train_federated_model(args):
         dataset_dict = datasets.load_cifar10_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
         model_fn = ResNet18_CIFAR10
         num_classes = 10
-        feature_dim = 512
+        feature_dim = 128 * 4 * 4 
     elif args.dataset.lower() == 'cifar100':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar100_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
         model_fn = ResNet18_CIFAR100
         num_classes = 100
-        feature_dim = 512
+        feature_dim = 256 * 4 * 4 
     elif args.dataset.lower() == 'tinyimagenet':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_tinyimagenet_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
         model_fn = ResNet18_TinyImageNet
         num_classes = 200
-        feature_dim = 512
+        feature_dim = 512 * 4 * 4
     else:
         raise ValueError(f"不支持的数据集: {args.dataset}")
     

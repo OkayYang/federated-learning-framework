@@ -55,7 +55,7 @@ LEARNING_RATE=0.01  # 学习率
 OPTIMIZER="adam"    # 优化器: adam, sgd
 SEED=42             # 随机种子，保证实验可重复性
 PARTITION="dirichlet"   # 数据分区方式: iid, noiid, dirichlet
-NUM_CLIENTS=20      # 客户端数量
+NUM_CLIENTS=10      # 客户端数量
 DIR_BETA=0.2       # Dirichlet分布参数，仅在PARTITION="dirichlet"时使用
 
 
