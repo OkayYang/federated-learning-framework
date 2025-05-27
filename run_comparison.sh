@@ -27,13 +27,13 @@ DATASET="$1"
 # 获取要运行的算法列表
 if [ $# -eq 2 ]; then
     if [ "$2" = "all" ]; then
-        ALGORITHMS="fedavg,fedprox,moon,feddistill,fedgen,fedspd,fedalone"
+        ALGORITHMS="fedavg,fedprox,scaffold,moon,feddistill,fedgen,fedspd,fedalone"
     else
         ALGORITHMS="$2"
     fi
 else
     # 默认运行所有算法
-    ALGORITHMS="fedavg,fedprox,moon,feddistill,fedgen,fedspd,fedalone"
+    ALGORITHMS="fedavg,fedspd,fedprox,moon,feddistill,fedgen"
 fi
 
 # 验证数据集名称
@@ -50,13 +50,14 @@ echo "选择的算法: $ALGORITHMS"
 BATCH_SIZE=64    # 批处理大小
 LOCAL_EPOCHS=10  # 本地训练轮数
 COMM_ROUNDS=30  # 通信轮数
-RATIO_CLIENT=0.8  # 每轮参与训练的客户端比例
+RATIO_CLIENT=1  # 每轮参与训练的客户端比例
 LEARNING_RATE=0.01  # 学习率
 OPTIMIZER="adam"    # 优化器: adam, sgd
 SEED=42             # 随机种子，保证实验可重复性
 PARTITION="dirichlet"   # 数据分区方式: iid, noiid, dirichlet
 NUM_CLIENTS=10      # 客户端数量
 DIR_BETA=0.2       # Dirichlet分布参数，仅在PARTITION="dirichlet"时使用
+DATA_FRACTION=0.3    # 数据集采样比例
 
 
 # 创建日志目录
@@ -81,6 +82,7 @@ LOG_FILE="${LOG_DIR}/experiment_$(date +%Y%m%d_%H%M%S).log"
     echo "数据分区方式: $PARTITION"
     echo "客户端数量: $NUM_CLIENTS"
     echo "Dirichlet参数: $DIR_BETA"
+    echo "数据集采样比例: $DATA_FRACTION"
     echo "========================================"
     echo ""
 } | tee -a "$LOG_FILE"
@@ -111,6 +113,7 @@ for strategy in "${ALGORITHM_LIST[@]}"; do
         --seed $SEED \
         --partition $PARTITION \
         --dir_beta $DIR_BETA \
+        --data_fraction $DATA_FRACTION \
         --num_clients $NUM_CLIENTS 2>&1 | tee -a "$LOG_FILE"
 done
 
