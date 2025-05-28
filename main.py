@@ -17,7 +17,7 @@ from fl.data import datasets
 # 导入必要的库和模块
 from fl.client.fl_base import ModelConfig
 from fl.server.fl_server import FLServer
-from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet, ResNet18_CIFAR10, ResNet18_CIFAR100, ResNet18_TinyImageNet
+from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet, ResNet18_CIFAR10, ResNet18_CIFAR100, ResNet18_TinyImageNet, TinyImageNetNet
 from fl.model.generator import Generator
 from fl.utils import (
     optim_wrapper,
@@ -76,21 +76,21 @@ def train_federated_model(args):
     elif args.dataset.lower() == 'cifar10':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar10_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
-        model_fn = ResNet18_CIFAR10
+        model_fn = CIFAR10Net
         num_classes = 10
-        feature_dim = 128 * 4 * 4 
+        feature_dim = 256
     elif args.dataset.lower() == 'cifar100':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar100_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
-        model_fn = ResNet18_CIFAR100
+        model_fn = CIFAR100Net
         num_classes = 100
-        feature_dim = 256 * 4 * 4 
+        feature_dim = 512
     elif args.dataset.lower() == 'tinyimagenet':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_tinyimagenet_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
-        model_fn = ResNet18_TinyImageNet
+        model_fn = TinyImageNetNet
         num_classes = 200
-        feature_dim = 512 * 4 * 4
+        feature_dim = 512
     else:
         raise ValueError(f"不支持的数据集: {args.dataset}")
     
@@ -190,12 +190,12 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
 
      # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='fedgen',
+    parser.add_argument('--strategy', type=str, default='scaffold',
                         choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone'],
                         help='联邦学习策略')
     
     # 数据集相关参数
-    parser.add_argument('--dataset', type=str, default='tinyimagenet', 
+    parser.add_argument('--dataset', type=str, default='cifar10', 
                         choices=['femnist', 'mnist', 'cifar10', 'cifar100', 'tinyimagenet'],
                         help='要使用的数据集 (femnist, mnist, cifar10, cifar100, tinyimagenet)')
     parser.add_argument('--partition', type=str, default='dirichlet', choices=['iid', 'noiid', 'dirichlet'],

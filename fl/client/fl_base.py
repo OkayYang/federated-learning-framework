@@ -99,7 +99,7 @@ class BaseClient(ABC):
         
         # 计算平均损失和准确率
         accuracy = correct / total if total > 0 else 0
-        avg_loss = test_loss / total if total > 0 else float('inf')
+        avg_loss = test_loss / total if total > 0 else 0
         
         return accuracy, avg_loss
 

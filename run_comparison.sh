@@ -33,7 +33,7 @@ if [ $# -eq 2 ]; then
     fi
 else
     # 默认运行所有算法
-    ALGORITHMS="fedavg,fedspd,fedprox,moon,feddistill,fedgen"
+    ALGORITHMS="fedavg,fedprox,scaffold,moon,feddistill,fedgen,fedspd,fedalone"
 fi
 
 # 验证数据集名称
@@ -57,7 +57,7 @@ SEED=42             # 随机种子，保证实验可重复性
 PARTITION="dirichlet"   # 数据分区方式: iid, noiid, dirichlet
 NUM_CLIENTS=10      # 客户端数量
 DIR_BETA=0.2       # Dirichlet分布参数，仅在PARTITION="dirichlet"时使用
-DATA_FRACTION=0.3    # 数据集采样比例
+DATA_FRACTION=0.5    # 数据集采样比例
 
 
 # 创建日志目录
