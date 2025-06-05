@@ -294,260 +294,132 @@ class FedGenStrategy(AggregationStrategy):
 
 
 class FedSPDStrategy(AggregationStrategy):
-    """FedSPD聚合策略 - 使用K-means聚类和多种高级聚合技术"""
+    """FedSmart聚合策略 - 简单而强大的质量感知聚合"""
     def __init__(self):
         self.global_reps = None
         self.global_logits = None
-        self.eps = 1e-10  # 添加一个小的常数避免除零
-        self.n_clusters = 3  # K-means聚类数量，可以根据实际情况调整
-        self.use_kmeans = True  # 是否使用K-means聚类
-        self.use_spectral = True  # 是否使用谱聚类
-        self.use_weighted_avg = True  # 是否使用加权平均
-        self.cluster_weight_power = 2.0  # 聚类权重指数，用于调整聚类中心的影响力
+        
+        # 历史性能追踪
+        self.client_performance_history = {}
+        self.performance_window = 5  # 追踪最近5轮的性能
+        
+        # 聚合参数
+        self.quality_weight_factor = 2.0    # 质量权重因子
+        self.stability_bonus = 0.2          # 稳定性奖励
+        self.min_client_weight = 0.1        # 最小客户端权重
     
-    def _compute_confidence_scores(self, logits):
-        """基于预测熵计算置信度分数"""
-        probs = torch.softmax(torch.tensor(logits, dtype=torch.float32), dim=-1)
-        entropy = -torch.sum(probs * torch.log(probs + self.eps), dim=-1)
-        confidence = 1 - (entropy / (np.log(probs.shape[-1]) + self.eps))  # 归一化熵
-        return confidence.numpy()
-    
-    def _compute_representation_quality(self, reps, labels):
-        """基于类内紧致性和类间分离性计算表征质量"""
-        reps = np.array(reps, dtype=np.float32)
-        labels = np.array(labels)
-        unique_classes = np.unique(labels)
+    def _compute_client_quality_score(self, train_loss, sample_num, client_name, round_num):
+        """计算客户端质量分数 - 简单有效"""
         
-        # 计算类内距离(紧致性)
-        intra_distances = []
-        for cls in unique_classes:
-            cls_reps = reps[labels == cls]
-            if len(cls_reps) > 1:
-                centroid = np.mean(cls_reps, axis=0)
-                dist = np.mean(np.linalg.norm(cls_reps - centroid, axis=1))
-                intra_distances.append(dist)
+        # 1. 基础质量分数（基于损失和样本数）
+        loss_score = max(0.1, 1.0 / (1.0 + train_loss))  # 损失越低分数越高
+        sample_score = min(1.0, sample_num / 1000.0)     # 样本数归一化
+        base_quality = 0.7 * loss_score + 0.3 * sample_score
         
-        if not intra_distances:  # 如果没有计算出任何距离
-            return 1.0  # 返回1.0而不是0.0，这样可以保持权重的有效性
-            
-        compactness = 1 / (np.mean(intra_distances) + self.eps)
+        # 2. 历史性能奖励
+        if client_name not in self.client_performance_history:
+            self.client_performance_history[client_name] = []
         
-        # 计算类间距离(分离性)
-        centroids = []
-        for cls in unique_classes:
-            cls_reps = reps[labels == cls]
-            centroids.append(np.mean(cls_reps, axis=0))
+        # 记录当前性能
+        self.client_performance_history[client_name].append(train_loss)
+        if len(self.client_performance_history[client_name]) > self.performance_window:
+            self.client_performance_history[client_name] = \
+                self.client_performance_history[client_name][-self.performance_window:]
         
-        centroids = np.array(centroids, dtype=np.float32)
-        if len(centroids) > 1:
-            separation = np.mean([
-                np.min([np.linalg.norm(c1 - c2) for j, c2 in enumerate(centroids) if i != j])
-                for i, c1 in enumerate(centroids)
-            ])
+        # 计算性能稳定性奖励
+        history = self.client_performance_history[client_name]
+        if len(history) >= 3:
+            # 损失下降趋势和稳定性
+            recent_losses = np.array(history[-3:])
+            if len(recent_losses) > 1:
+                trend = -np.polyfit(range(len(recent_losses)), recent_losses, 1)[0]  # 斜率为负表示下降
+                stability = 1.0 / (1.0 + np.std(recent_losses))
+                performance_bonus = self.stability_bonus * (max(0, trend) + stability) / 2
+            else:
+                performance_bonus = 0
         else:
-            separation = 1.0  # 当只有一个类别时，设置为1.0而不是0.0
-            
-        quality_score = float(compactness * separation)  # 确保返回标量
-        return max(quality_score, self.eps)  # 确保质量分数不为零
-    
-    def _kmeans_cluster_representations(self, reps_list, weights=None):
-        """使用K-means聚类对表征进行聚类，返回聚类中心和权重"""
-        try:
-            from sklearn.cluster import KMeans
-            from sklearn.metrics import silhouette_score
-        except ImportError:
-            print("警告: scikit-learn未安装，无法使用K-means聚类。将使用加权平均替代。")
-            return None, None
-            
-        reps_array = np.array(reps_list, dtype=np.float32)
-        if len(reps_array) < self.n_clusters:
-            # 如果样本数少于聚类数，直接返回原始表征和权重
-            return reps_array, weights if weights is not None else np.ones(len(reps_array)) / len(reps_array)
-            
-        # 自动确定最佳聚类数
-        best_n_clusters = 2
-        best_score = -1
+            performance_bonus = 0
         
-        # 尝试不同的聚类数，选择轮廓系数最高的
-        max_clusters = min(self.n_clusters, len(reps_array) - 1)
-        for n_clusters in range(2, max_clusters + 1):
-            try:
-                kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-                cluster_labels = kmeans.fit_predict(reps_array)
+        final_quality = base_quality + performance_bonus
+        return min(final_quality, 2.0)  # 限制最大分数
+
+    def _smart_weight_computation(self, client_qualities, sample_nums):
+        """智能权重计算 - 质量感知但保证公平性"""
+        
+        # 1. 基于样本数的基础权重
+        total_samples = sum(sample_nums)
+        base_weights = np.array(sample_nums) / total_samples
+        
+        # 2. 基于质量的调整权重
+        quality_scores = np.array(client_qualities)
+        
+        # 归一化质量分数
+        quality_normalized = quality_scores / (np.sum(quality_scores) + 1e-8)
+        
+        # 3. 混合权重：样本权重 + 质量权重
+        # 高质量客户端获得更多权重，但不会完全忽略样本数
+        mixed_weights = (
+            0.6 * base_weights +                                    # 样本数权重
+            0.4 * quality_normalized                                # 质量权重
+        )
+        
+        # 4. 确保最小权重（避免某些客户端被完全忽略）
+        min_weight = self.min_client_weight / len(mixed_weights)
+        mixed_weights = np.maximum(mixed_weights, min_weight)
+        
+        # 5. 重新归一化
+        mixed_weights = mixed_weights / np.sum(mixed_weights)
+        
+        return mixed_weights
+
+    def _aggregate_knowledge_simple(self, class_data_list, weights):
+        """简单高效的知识聚合"""
+        aggregated = {}
+        
+        # 收集所有类别的数据
+        all_class_data = {}
+        for client_idx, client_data in enumerate(class_data_list):
+            client_weight = weights[client_idx]
+            
+            for class_id, data in client_data.items():
+                if class_id not in all_class_data:
+                    all_class_data[class_id] = []
                 
-                # 至少需要2个聚类且每个聚类至少有一个样本才能计算轮廓系数
-                if len(np.unique(cluster_labels)) > 1:
-                    score = silhouette_score(reps_array, cluster_labels)
-                    if score > best_score:
-                        best_score = score
-                        best_n_clusters = n_clusters
-            except:
-                continue
+                all_class_data[class_id].append((np.array(data), client_weight))
+        
+        # 加权聚合每个类别
+        for class_id, data_and_weights in all_class_data.items():
+            if data_and_weights:
+                data_arrays = [d for d, _ in data_and_weights]
+                data_weights = [w for _, w in data_and_weights]
                 
-        # 使用最佳聚类数进行聚类
-        kmeans = KMeans(n_clusters=best_n_clusters, random_state=42)
-        cluster_labels = kmeans.fit_predict(reps_array)
-        cluster_centers = kmeans.cluster_centers_
-        
-        # 计算每个聚类的权重
-        cluster_weights = np.zeros(best_n_clusters, dtype=np.float32)
-        for i in range(best_n_clusters):
-            # 该聚类中的样本数
-            cluster_size = np.sum(cluster_labels == i)
-            # 该聚类中样本的原始权重之和
-            if weights is not None:
-                cluster_weights[i] = np.sum(weights[cluster_labels == i])
-            else:
-                cluster_weights[i] = cluster_size / len(reps_array)
+                # 归一化权重
+                data_weights = np.array(data_weights)
+                data_weights = data_weights / (np.sum(data_weights) + 1e-8)
                 
-        # 根据聚类大小和紧密度调整权重
-        distances_to_center = np.zeros(best_n_clusters, dtype=np.float32)
-        for i in range(best_n_clusters):
-            cluster_points = reps_array[cluster_labels == i]
-            if len(cluster_points) > 0:
-                # 计算聚类内样本到中心的平均距离
-                distances = np.linalg.norm(cluster_points - cluster_centers[i], axis=1)
-                distances_to_center[i] = np.mean(distances) + self.eps
+                # 加权平均
+                aggregated[class_id] = np.average(data_arrays, axis=0, weights=data_weights)
         
-        # 距离越小，权重越大
-        compactness_weights = 1.0 / (distances_to_center + self.eps)
-        # 归一化紧密度权重
-        compactness_weights = compactness_weights / (np.sum(compactness_weights) + self.eps)
-        
-        # 结合聚类大小和紧密度的权重
-        final_weights = cluster_weights * (compactness_weights ** self.cluster_weight_power)
-        final_weights = final_weights / (np.sum(final_weights) + self.eps)
-        
-        return cluster_centers, final_weights
-    
-    def _spectral_cluster_representations(self, reps_list, weights=None):
-        """使用谱聚类对表征进行聚类，更适合非凸形状的聚类"""
-        try:
-            from sklearn.cluster import SpectralClustering
-            from sklearn.metrics import silhouette_score
-        except ImportError:
-            print("警告: scikit-learn未安装，无法使用谱聚类。将使用加权平均替代。")
-            return None, None
-            
-        reps_array = np.array(reps_list, dtype=np.float32)
-        if len(reps_array) < self.n_clusters:
-            # 如果样本数少于聚类数，直接返回原始表征和权重
-            return reps_array, weights if weights is not None else np.ones(len(reps_array)) / len(reps_array)
-            
-        # 自动确定最佳聚类数
-        best_n_clusters = 2
-        best_score = -1
-        
-        # 尝试不同的聚类数，选择轮廓系数最高的
-        max_clusters = min(self.n_clusters, len(reps_array) - 1)
-        for n_clusters in range(2, max_clusters + 1):
-            try:
-                spectral = SpectralClustering(n_clusters=n_clusters, 
-                                             affinity='nearest_neighbors',
-                                             random_state=42)
-                cluster_labels = spectral.fit_predict(reps_array)
-                
-                # 至少需要2个聚类且每个聚类至少有一个样本才能计算轮廓系数
-                if len(np.unique(cluster_labels)) > 1:
-                    score = silhouette_score(reps_array, cluster_labels)
-                    if score > best_score:
-                        best_score = score
-                        best_n_clusters = n_clusters
-            except:
-                continue
-                
-        # 使用最佳聚类数进行聚类
-        spectral = SpectralClustering(n_clusters=best_n_clusters, 
-                                     affinity='nearest_neighbors',
-                                     random_state=42)
-        cluster_labels = spectral.fit_predict(reps_array)
-        
-        # 计算聚类中心
-        cluster_centers = np.zeros((best_n_clusters, reps_array.shape[1]), dtype=np.float32)
-        for i in range(best_n_clusters):
-            cluster_points = reps_array[cluster_labels == i]
-            if len(cluster_points) > 0:
-                cluster_centers[i] = np.mean(cluster_points, axis=0)
-        
-        # 计算每个聚类的权重
-        cluster_weights = np.zeros(best_n_clusters, dtype=np.float32)
-        for i in range(best_n_clusters):
-            # 该聚类中的样本数
-            cluster_size = np.sum(cluster_labels == i)
-            # 该聚类中样本的原始权重之和
-            if weights is not None:
-                cluster_weights[i] = np.sum(weights[cluster_labels == i])
-            else:
-                cluster_weights[i] = cluster_size / len(reps_array)
-                
-        # 根据聚类大小和紧密度调整权重
-        distances_to_center = np.zeros(best_n_clusters, dtype=np.float32)
-        for i in range(best_n_clusters):
-            cluster_points = reps_array[cluster_labels == i]
-            if len(cluster_points) > 0:
-                # 计算聚类内样本到中心的平均距离
-                distances = np.linalg.norm(cluster_points - cluster_centers[i], axis=1)
-                distances_to_center[i] = np.mean(distances) + self.eps
-        
-        # 距离越小，权重越大
-        compactness_weights = 1.0 / (distances_to_center + self.eps)
-        # 归一化紧密度权重
-        compactness_weights = compactness_weights / (np.sum(compactness_weights) + self.eps)
-        
-        # 结合聚类大小和紧密度的权重
-        final_weights = cluster_weights * (compactness_weights ** self.cluster_weight_power)
-        final_weights = final_weights / (np.sum(final_weights) + self.eps)
-        
-        return cluster_centers, final_weights
-    
-    def _aggregate_with_clustering(self, items_list, weights_list=None, use_spectral=False):
-        """使用聚类方法聚合表征或logits"""
-        if not items_list:
-            return None
-            
-        # 提取所有项和对应权重
-        items = []
-        weights = []
-        
-        for i, (item, weight) in enumerate(items_list):
-            items.append(item)
-            weights.append(weight)
-            
-        items = np.array(items, dtype=np.float32)
-        weights = np.array(weights, dtype=np.float32) if weights else None
-        
-        # 根据配置选择聚类方法
-        if use_spectral and self.use_spectral:
-            centers, cluster_weights = self._spectral_cluster_representations(items, weights)
-        elif self.use_kmeans:
-            centers, cluster_weights = self._kmeans_cluster_representations(items, weights)
-        else:
-            centers, cluster_weights = None, None
-            
-        # 如果聚类失败或不使用聚类，则使用加权平均
-        if centers is None or cluster_weights is None:
-            if weights is not None:
-                weights = weights / (np.sum(weights) + self.eps)
-                return np.average(items, axis=0, weights=weights)
-            else:
-                return np.mean(items, axis=0)
-                
-        # 使用聚类中心的加权平均
-        return np.average(centers, axis=0, weights=cluster_weights)
-    
+        return aggregated
+
     def aggregate(self, server, selected_workers, round_num, global_weights):
-        """重写聚合方法，处理类别表征和logits"""
-        if not selected_workers:  # 如果没有选中的工作节点
-            return global_weights, []  # 返回原始权重和空的损失列表
-            
-        client_weight_list = []
-        sample_num_list = []
-        train_loss_list = []
-        client_class_reps = []
-        client_class_logits = []
+        """FedSmart聚合 - 智能但简单"""
+        if not selected_workers:
+            return global_weights, []
+        
+        print(f"\n🧠 第{round_num}轮 FedSmart聚合 (客户端数: {len(selected_workers)})")
+        
+        # 1. 收集客户端数据
+        client_weights_list = []
         client_qualities = []
+        sample_nums = []
+        train_losses = []
+        class_reps_list = []
+        class_logits_list = []
+        client_names = []
         
         for client_name, worker in selected_workers.items():
+            # 调用客户端训练
             client_weight, sample_num, train_loss, class_reps, class_logits = worker.local_train(
                 sync_round=round_num,
                 weights=global_weights,
@@ -555,92 +427,49 @@ class FedSPDStrategy(AggregationStrategy):
                 global_logits=self.global_logits
             )
             
-            # 计算该客户端表征的质量
-            all_reps = []
-            all_labels = []
-            for cls, reps in class_reps.items():
-                all_reps.extend([reps])
-                all_labels.extend([cls])
+            # 计算客户端质量分数
+            quality_score = self._compute_client_quality_score(
+                train_loss, sample_num, client_name, round_num
+            )
             
-            if all_reps:
-                quality_score = self._compute_representation_quality(all_reps, all_labels)
-            else:
-                quality_score = 1.0  # 当没有表征时，设置为1.0而不是0.0
-                
+            # 收集数据
+            client_weights_list.append(client_weight)
             client_qualities.append(quality_score)
-            client_weight_list.append(client_weight)
-            sample_num_list.append(sample_num)
-            train_loss_list.append(train_loss)
-            client_class_reps.append(class_reps)
-            client_class_logits.append(class_logits)
+            sample_nums.append(sample_num)
+            train_losses.append(train_loss)
+            class_reps_list.append(class_reps)
+            class_logits_list.append(class_logits)
+            client_names.append(client_name)
+            
             server.history["workers"][client_name]["train_loss"].append(train_loss)
         
-        # 归一化质量分数
-        if client_qualities:
-            quality_weights = np.array(client_qualities, dtype=np.float32)
-            sum_weights = np.sum(quality_weights) + self.eps
-            quality_weights = quality_weights / sum_weights
-        else:
-            # 如果没有质量分数，使用均匀权重
-            num_clients = len(selected_workers)
-            quality_weights = np.ones(num_clients, dtype=np.float32) / num_clients
+        # 2. 智能权重计算
+        aggregation_weights = self._smart_weight_computation(client_qualities, sample_nums)
         
-        # 确保sample_weights不全为零
-        sample_weights = np.array([max(float(w), self.eps) for w in sample_num_list], dtype=np.float32)
-        total_samples = np.sum(sample_weights)
-        if total_samples < self.eps:  # 如果总样本数接近零
-            sample_weights = np.ones_like(sample_weights) / len(sample_weights)
-        else:
-            sample_weights = sample_weights / total_samples
-            
-        # 使用质量感知权重聚合模型权重
-        weighted_samples = sample_weights * quality_weights
-        # 再次归一化确保权重和为1
-        weighted_samples = weighted_samples / (np.sum(weighted_samples) + self.eps)
-        global_weight = average_weight(client_weight_list, weighted_samples.tolist())
+        # 3. 聚合模型权重
+        final_model_weights = average_weight(client_weights_list, aggregation_weights)
         
-        # 增强型表征和logits聚合
-        all_class_reps = {}
-        all_class_logits = {}
+        # 4. 聚合知识
+        final_reps = self._aggregate_knowledge_simple(class_reps_list, aggregation_weights)
+        final_logits = self._aggregate_knowledge_simple(class_logits_list, aggregation_weights)
         
-        for client_idx, (client_rep, client_logit) in enumerate(zip(client_class_reps, client_class_logits)):
-            client_weight = float(quality_weights[client_idx])  # 确保是标量
-            
-            for class_id, rep in client_rep.items():
-                if class_id not in all_class_reps:
-                    all_class_reps[class_id] = []
-                all_class_reps[class_id].append((np.array(rep, dtype=np.float32), max(client_weight, self.eps)))
-                
-            for class_id, logit in client_logit.items():
-                if class_id not in all_class_logits:
-                    all_class_logits[class_id] = []
-                
-                # 计算该类别的置信度分数
-                confidence = float(self._compute_confidence_scores(logit))
-                # 结合质量和置信度的权重
-                combined_weight = float(client_weight * confidence)  # 确保是标量
-                combined_weight = max(combined_weight, self.eps)  # 确保权重不为零
-                
-                all_class_logits[class_id].append((np.array(logit, dtype=np.float32), combined_weight))
+        # 5. 更新全局状态
+        self.global_reps = final_reps
+        self.global_logits = final_logits
         
-        # 加权聚合
-        global_class_reps = {}
-        global_logits = {}
+        # 6. 打印统计信息
+        avg_loss = np.mean(train_losses)
+        avg_quality = np.mean(client_qualities)
         
-        for class_id, reps_and_weights in all_class_reps.items():
-            if reps_and_weights:
-                # 使用聚类方法聚合表征
-                global_class_reps[class_id] = self._aggregate_with_clustering(
-                    reps_and_weights, use_spectral=True
-                )
-                
-        for class_id, logits_and_weights in all_class_logits.items():
-            if logits_and_weights:
-                # 使用聚类方法聚合logits
-                global_logits[class_id] = self._aggregate_with_clustering(
-                    logits_and_weights, use_spectral=False
-                )
+        print(f"📊 聚合统计:")
+        print(f"   - 平均训练损失: {avg_loss:.4f}")
+        print(f"   - 平均质量分数: {avg_quality:.4f}")
+        print(f"   - 权重分布: {[f'{w:.3f}' for w in aggregation_weights]}")
+        print(f"   - 全局知识: 表征({len(final_reps)}类), logits({len(final_logits)}类)")
         
-        self.global_reps = global_class_reps
-        self.global_logits = global_logits        
-        return global_weight, train_loss_list
+        # 显示性能最好的客户端
+        best_client_idx = np.argmax(client_qualities)
+        best_client = client_names[best_client_idx]
+        print(f"   - 🏆 最佳客户端: {best_client} (质量: {client_qualities[best_client_idx]:.3f})")
+        
+        return final_model_weights, train_losses
