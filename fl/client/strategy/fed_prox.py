@@ -20,18 +20,15 @@ class FedProx(BaseClient):
         self.mu = kwargs.get('mu', 0.01)
 
     def proximal_term(self, local_weights, global_weights):
-        """
-        计算近端项（proximal term），用于FedProx算法
-        :param w1: 全局模型权重列表
-        :param w2: 本地模型权重列表
-        :return: 近端项损失
-        """
-        l1 = len(local_weights)
-        assert l1 == len(global_weights), "weights should be same in the shape"
         proximal_term = 0
-        for i in range(l1):
-            proximal_term += (torch.tensor(local_weights[i]) - global_weights[i]).norm(2).pow(2)
-        return proximal_term/2.0    
+        total_params = 0
+        for i in range(len(local_weights)):
+            diff = (torch.tensor(local_weights[i]) - global_weights[i]).norm(2).pow(2)
+            proximal_term += diff
+            total_params += torch.tensor(local_weights[i]).numel()
+    
+        # 按参数数量归一化
+        return proximal_term / (2.0 * total_params) 
         
     def local_train(self, sync_round: int, weights=None):
         """
