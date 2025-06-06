@@ -51,8 +51,8 @@ class FedSPD(BaseClient):
         """
         
         # 1. 更新模型权重和动量
-        # if weights is not None:
-        #     self._smart_model_update(weights, sync_round)
+        if weights is not None:
+            self._smart_model_update(weights, sync_round)
         
         # 2. 分析本地数据分布
         self._analyze_local_data()
@@ -260,7 +260,7 @@ class FedSPD(BaseClient):
         # 基于数据异构度调整
         if self.data_heterogeneity > 0.7:
             lr_factor *= 0.8  # 高异构度降低学习率
-        
+        lr_factor = 0.6
         # 更新优化器学习率
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = param_group.get('initial_lr', param_group['lr']) * lr_factor

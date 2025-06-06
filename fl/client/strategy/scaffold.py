@@ -96,11 +96,13 @@ class Scaffold(BaseClient):
                 # 计算并显示每个epoch的平均损失
                 total_loss += epoch_loss
                 avg_loss = epoch_loss / len(self.train_loader)
+                current_lr = self.optimizer.param_groups[0]['lr']
                 pbar.set_postfix({
                     'epoch': f"{epoch+1}/{self.epochs}",
-                    'loss': f"{avg_loss:.4f}"
+                    'loss': f"{avg_loss:.4f}",
+                    'lr': f"{current_lr:.6f}"
                 })
-
+        self.scheduler.step()
         # 4. 更新客户端控制变量
         # 使用Option II更新控制变量: c_i ← c_i − c + 1/(Kηl) * (x − y_i)
         # 其中x是全局模型参数，y_i是本地更新后的模型参数

@@ -116,12 +116,15 @@ class FedDistill(BaseClient):
                 avg_kd_loss = kd_loss / len(self.train_loader)
                 avg_ce_loss = ce_loss / len(self.train_loader)
                 total_loss += epoch_loss
+                current_lr = self.optimizer.param_groups[0]['lr']
                 pbar.set_postfix({
                     'epoch': f"{epoch+1}/{self.epochs}",
                     'loss': f"{avg_loss:.4f}",
                     'ce_loss': f"{avg_ce_loss:.4f}",
-                    'kd_loss': f"{avg_kd_loss:.4f}"
+                    'kd_loss': f"{avg_kd_loss:.4f}",
+                    'lr': f"{current_lr:.6f}"
                 })
+        self.scheduler.step()
 
         # 5. 计算每个类的平均logits
         averaged_logits = {}

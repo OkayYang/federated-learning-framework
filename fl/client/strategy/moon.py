@@ -87,14 +87,17 @@ class Moon(BaseClient):
                     pbar.update(1)
                 total_loss += epoch_loss
                 avg_loss = epoch_loss / len(self.train_loader)
+                current_lr = self.optimizer.param_groups[0]['lr']
                 pbar.set_postfix({
                     'epoch': f"{epoch+1}/{self.epochs}",
                     'loss': f"{avg_loss:.4f}",
                     'original_loss': f"{epoch_original_loss:.4f}",
                     'contrastive_loss': f"{epoch_contrastive_loss:.4f}",
                     'μ': f"{self.mu}", 
-                    'T': f"{self.temperature}"
+                    'T': f"{self.temperature}",
+                    'lr': f"{current_lr:.6f}"
                 })
+        self.scheduler.step()
         # 4. 获取训练后的权重
         model_weights = self.get_weights(return_numpy=True)
         # 创建当前模型的副本，并添加到历史模型列表

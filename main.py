@@ -21,6 +21,7 @@ from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet, ResNet
 from fl.model.generator import Generator
 from fl.utils import (
     optim_wrapper,
+    scheduler_wrapper,
     plot_client_label_distribution,
     plot_global_metrics,
     plot_worker_metrics,
@@ -124,6 +125,23 @@ def train_federated_model(args):
         optim_fn = optim_wrapper(optim.SGD, lr=args.lr, momentum=0.9)
     else:
         raise ValueError(f"不支持的优化器: {args.optimizer}")
+    
+    # 创建调度器函数
+    scheduler_fn = scheduler_wrapper(
+        scheduler_type=args.scheduler,
+        step_size=args.step_size,
+        gamma=args.gamma,
+        comm_rounds=args.comm_rounds
+    )
+    
+    # 打印调度器信息
+    print(f"🎛️ 学习率调度器配置: {args.scheduler}")
+    if args.scheduler == 'step':
+        print(f"   - 每{args.step_size}轮衰减{args.gamma}倍")
+    elif args.scheduler == 'exp':
+        print(f"   - 每轮衰减{args.gamma}倍")
+    elif args.scheduler == 'cosine':
+        print(f"   - {args.comm_rounds}轮余弦退火")
 
 
     # 创建FedProx和MOON算法的超参数
@@ -145,6 +163,7 @@ def train_federated_model(args):
         model_fn=model_fn,  # 模型函数
         loss_fn=loss_fn,  # 损失函数
         optim_fn=optim_fn,  # 优化器函数
+        scheduler_fn=scheduler_fn,  # 调度器函数
         epochs=args.local_epochs,  # 本地训练轮数
         batch_size=args.batch_size,  # 批次大小
     )
@@ -190,7 +209,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
 
      # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='scaffold',
+    parser.add_argument('--strategy', type=str, default='fedprox',
                         choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone'],
                         help='联邦学习策略')
     
@@ -221,6 +240,16 @@ def parse_arguments():
     parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'sgd'],
                         help='优化器类型')
     
+    # 学习率调度器参数
+    parser.add_argument('--scheduler', type=str, default='step', 
+                        choices=['step', 'exp', 'cosine'],
+                        help='调度器类型: step(阶梯), exp(指数), cosine(余弦)')
+    parser.add_argument('--step_size', type=int, default=5,
+                        help='StepLR每多少轮衰减一次')
+    parser.add_argument('--gamma', type=float, default=0.8,
+                        help='学习率衰减倍数')
+    parser.add_argument('--patience', type=int, default=3,
+                        help='ReduceLROnPlateau的耐心值')
 
     # 其他参数
     parser.add_argument('--seed', type=int, default=42,

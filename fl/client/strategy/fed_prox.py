@@ -44,9 +44,6 @@ class FedProx(BaseClient):
             # 加载服务器传来的全局模型权重
             self.update_weights(weights)
                 
-        # 确认global_model是否存在
-        if self.global_model is None:
-            print(f"客户端 {self.client_id} 警告: 没有全局模型，无法应用FedProx正则化")
             
         # 2. 开始本地训练
         self.model.train()
@@ -103,13 +100,15 @@ class FedProx(BaseClient):
                 avg_loss = epoch_loss / len(self.train_loader)
                 avg_ce_loss = epoch_ce_loss / len(self.train_loader)
                 avg_prox_loss = epoch_prox_loss / len(self.train_loader)
-                
+                current_lr = self.optimizer.param_groups[0]['lr']
                 pbar.set_postfix({
                     'epoch': f"{epoch+1}/{self.epochs}",
                     'loss': f"{avg_loss:.4f}",
                     'ce_loss': f"{avg_ce_loss:.4f}",
-                    'prox_loss': f"{avg_prox_loss:.4f}"
+                    'prox_loss': f"{avg_prox_loss:.4f}",
+                    'lr': f"{current_lr:.6f}"
                 })
+        self.scheduler.step()
                 
         # 3. 获取训练后的权重
         model_weights = self.get_weights(return_numpy=True)

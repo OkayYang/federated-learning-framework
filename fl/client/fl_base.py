@@ -24,6 +24,7 @@ class BaseClient(ABC):
         batch_size,
         train_loader,
         test_loader,
+        scheduler,
         **kwargs,
     ):
         self.client_id = client_id
@@ -31,6 +32,7 @@ class BaseClient(ABC):
         self.model = model.to(self.device)
         self.loss = loss
         self.optimizer = optimizer
+        self.scheduler = scheduler  # 学习率调度器
         self.epochs = epochs
         self.batch_size = batch_size
         self.train_loader = train_loader
@@ -40,6 +42,7 @@ class BaseClient(ABC):
         # 设置客户端特定的随机种子，确保环境隔离
         self.seed = kwargs.get('seed', 42)
         self._set_seed(self.seed)
+        
         
     def _set_seed(self, seed):
         """设置随机种子以确保可复现性"""
@@ -145,6 +148,7 @@ class ModelConfig:
         optim_fn: Callable[..., optim.Optimizer],  # 用于生成优化器的函数
         epochs: int,
         batch_size: int,
+        scheduler_fn=None,  # 用于生成调度器的函数
         **kwargs,
     ):
         """
@@ -152,18 +156,26 @@ class ModelConfig:
         :param model: 训练的模型
         :param loss_fn: 损失函数
         :param optimizer_fn: 优化器构造函数（如 optim.SGD 或 optim.Adam）
+        :param scheduler_fn: 调度器构造函数
         :param epochs: 训练的轮数
         :param batch_size: 批次大小
         """
         self.model_fn = model_fn
         self.loss_fn = loss_fn
         self.optim_fn = optim_fn
+        self.scheduler_fn = scheduler_fn
         self.epochs = epochs
         self.batch_size = batch_size
         self.kwargs = kwargs
     def get_optimizer(self, parameters):
         """获取优化器"""
         return self.optim_fn(parameters)
+
+    def get_scheduler(self, optimizer):
+        """获取调度器"""
+        if self.scheduler_fn is not None:
+            return self.scheduler_fn(optimizer)
+        return None
 
     def get_loss_fn(self):
         """获取损失函数"""

@@ -143,13 +143,15 @@ class FedGen(BaseClient):
                 total_loss += epoch_loss
                 avg_teacher_loss = epoch_teacher_loss / (len(self.train_loader) )
                 avg_kd_loss = epoch_kd_loss / (len(self.train_loader))
-
+                current_lr = self.optimizer.param_groups[0]['lr']
                 pbar.set_postfix({
                     'epoch': f"{epoch+1}/{self.epochs}",
                     'loss': f"{avg_loss:.4f}",
                     'teacher_loss': f"{avg_teacher_loss:.4f}",
-                    'kd_loss': f"{avg_kd_loss:.4f}"
+                    'kd_loss': f"{avg_kd_loss:.4f}",
+                    'lr': f"{current_lr:.6f}"
                 })
+        self.scheduler.step()
         
         # 6. 获取更新后的模型权重
         model_weights = self.get_weights(return_numpy=True)

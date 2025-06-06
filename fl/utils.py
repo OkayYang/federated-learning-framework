@@ -17,6 +17,35 @@ def optim_wrapper(func, *args, **kwargs):
     return wrapped_func
 
 
+def scheduler_wrapper(scheduler_type='step', **kwargs):
+    """
+    学习率调度器包装器
+    
+    Args:
+        scheduler_type: 调度器类型 'step', 'exp', 'cosine'
+        **kwargs: 调度器参数
+    """
+    from torch.optim.lr_scheduler import StepLR, ExponentialLR, CosineAnnealingLR
+    
+    def wrapped_func(optimizer):
+        step_size = kwargs.get('step_size', 5)
+        gamma = kwargs.get('gamma', 0.8)
+        patience = kwargs.get('patience', 3)
+        comm_rounds = kwargs.get('comm_rounds', 50)
+        
+        if scheduler_type == 'step':
+            return StepLR(optimizer, step_size=step_size, gamma=gamma)
+        elif scheduler_type == 'exp':
+            return ExponentialLR(optimizer, gamma=gamma)
+        elif scheduler_type == 'cosine':
+            return CosineAnnealingLR(optimizer, T_max=comm_rounds, eta_min=1e-6)
+        else:
+            # 默认使用StepLR
+            return StepLR(optimizer, step_size=step_size, gamma=gamma)
+    
+    return wrapped_func
+
+
 def plot_global_metrics(history: dict, experiment_name: str):
     # 从experiment_name中提取策略和数据集名称
     parts = experiment_name.split('_')

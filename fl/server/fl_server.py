@@ -7,6 +7,7 @@ import torch
 from tqdm import tqdm
 import numpy as np
 import os
+from torch.utils.data import DataLoader
 
 from fl.aggregation.aggregator import average_weight
 from fl.client.fl_base import ModelConfig
@@ -29,6 +30,12 @@ class FLServer:
         
         # 设置全局随机种子以确保结果可复现
         self._set_seed(seed)
+        
+        # 创建全局模型实例，用于全局数据集评估
+        self.global_model = model_config.get_model()
+        self.global_loss_fn = model_config.get_loss_fn()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.global_model.to(self.device)
         
         # 创建客户端
         self._workers = {}
@@ -69,6 +76,62 @@ class FLServer:
         if torch.cuda.is_available():
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
+    
+    def update_global_model_weights(self, weights):
+        """更新全局模型的权重"""
+        if len(weights) != len(self.global_model.state_dict()):
+            raise ValueError("传入的权重数组数量与全局模型参数数量不匹配。")
+        keys = self.global_model.state_dict().keys()
+        weights_dict = {}
+        for k, v in zip(keys, weights):
+            weights_dict[k] = torch.Tensor(np.copy(v)).to(self.device)
+        self.global_model.load_state_dict(weights_dict)
+    
+    def global_evaluate(self, test_dataset=None):
+        """
+        使用全局模型评估数据集
+        :param test_dataset: 可选的测试数据集，如果为None则使用全局测试数据集
+        :return: (accuracy, test_loss)
+        """
+        # 确保全局模型处于评估模式
+        self.global_model.eval()
+        correct = 0
+        test_loss = 0
+        total = 0
+        
+        # 根据输入选择测试数据集
+        if test_dataset is None:
+            test_dataset = self.global_test_dataset
+        
+        # 创建统一的数据加载器，确保评估条件一致
+        test_loader = DataLoader(
+            test_dataset, 
+            batch_size=self.model_config.get_batch_size(), 
+            shuffle=False,  # 评估时不打乱数据顺序，确保一致性
+            drop_last=False  # 不丢弃最后一个批次
+        )
+
+        with torch.no_grad():  # 不计算梯度
+            for data, target in test_loader:
+                data, target = data.to(self.device), target.to(self.device)
+                output = self.global_model(data)
+                
+                # 累加批次损失
+                batch_loss = self.global_loss_fn(output, target).item()
+                test_loss += batch_loss * len(data)  # 按样本数加权
+                
+                # 计算预测准确度
+                _, predicted = torch.max(output.data, 1)
+                total += target.size(0)
+                correct += (predicted == target).sum().item()
+        
+        # 计算平均损失和准确率
+        accuracy = correct / total if total > 0 else 0
+        avg_loss = test_loss / total if total > 0 else 0
+        
+        return accuracy, avg_loss
+    
+    
             
     def initialize_client_weights(self):
         """设置服务器端的全局模型"""
@@ -109,24 +172,15 @@ class FLServer:
                 self, selected_workers, round_num, global_weight
             )
             
-            # 使用之前创建的全局评估模型
-            global_accuracies = []
-            global_test_losses = []
-            print("\nEvaluating selected clients on global dataset...")
-            for client_name, worker in tqdm(
-                    selected_workers.items(), desc="Progress", unit="client"
-            ):
-                # 先更新客户端的模型权重为全局权重
-                #worker.update_weights(global_weight)
-                # 在客户端自己的测试数据上评估
-                test_acc, test_loss = worker.evaluate(self.global_test_dataset)
-
-                global_accuracies.append(test_acc)
-                global_test_losses.append(test_loss)
+            # 更新全局模型权重
+            self.update_global_model_weights(global_weight)
+            
+            # 使用全局模型评估全局数据集
+            print("\nEvaluating global model on global dataset...")
+            global_test_accuracy, global_test_loss = self.global_evaluate()
+            
             # 保存全局指标到历史记录中
             avg_train_loss = sum(train_loss_list) / len(train_loss_list) if train_loss_list else 0
-            global_test_accuracy = sum(global_accuracies) / len(global_accuracies)
-            global_test_loss = sum(global_test_losses) / len(global_test_losses)
             self.history["global"]["train_loss"].append(avg_train_loss)
             self.history["global"]["test_accuracy"].append(global_test_accuracy)
             self.history["global"]["test_loss"].append(global_test_loss)
@@ -139,8 +193,6 @@ class FLServer:
             for client_name, worker in tqdm(
                 selected_workers.items(), desc="Progress", unit="client"
             ):
-                # 先更新客户端的模型权重为全局权重
-                #worker.update_weights(global_weight)
                 # 在客户端自己的测试数据上评估
                 test_acc, test_loss = worker.evaluate()
                 

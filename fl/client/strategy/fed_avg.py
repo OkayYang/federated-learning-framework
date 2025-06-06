@@ -46,11 +46,13 @@ class FedAvg(BaseClient):
                     pbar.update(1)
                 total_loss += epoch_loss
                 avg_loss = epoch_loss / len(self.train_loader)
+                current_lr = self.optimizer.param_groups[0]['lr']
                 pbar.set_postfix({
                     'epoch': f"{epoch+1}/{self.epochs}",
-                    'loss': f"{avg_loss:.4f}"
+                    'loss': f"{avg_loss:.4f}",
+                    'lr': f"{current_lr:.6f}"
                 })
-                
+        self.scheduler.step()      
         # 3. 获取训练后的权重
         model_weights = self.get_weights(return_numpy=True)
 

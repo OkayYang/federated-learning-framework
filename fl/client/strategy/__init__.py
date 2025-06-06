@@ -47,6 +47,8 @@ def create_client(
     loss = model_config.get_loss_fn()
     # 设置优化器
     optimizer = model_config.get_optimizer(model.parameters())
+    # 设置调度器
+    scheduler = model_config.get_scheduler(optimizer)
     epochs = model_config.get_epochs()
     batch_size = model_config.get_batch_size()
 
@@ -68,6 +70,7 @@ def create_client(
         batch_size,
         train_dataLoader,
         test_dataLoader,
+        scheduler,  # 传递调度器
         **kwargs
     )
 
