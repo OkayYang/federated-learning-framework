@@ -34,13 +34,13 @@ LOG_FILE="${LOG_DIR}/experiment_$(date +%Y%m%d_%H%M%S).log"
     # 获取要运行的算法列表
     if [ $# -eq 2 ]; then
         if [ "$2" = "all" ]; then
-            ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,fedalone"
+            ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone"
         else
             ALGORITHMS="$2"
         fi
     else
         # 默认运行所有算法
-        ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,fedalone"
+        ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone"
     fi
 
     # 验证数据集名称

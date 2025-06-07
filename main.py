@@ -297,7 +297,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
 
      # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='scaffold',
+    parser.add_argument('--strategy', type=str, default='fedspd',
                         choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone', 'fedftg'],
                         help='联邦学习策略')
     

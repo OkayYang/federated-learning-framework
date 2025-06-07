@@ -1,140 +1,437 @@
 # -*- coding: utf-8 -*-
 # @Author  : xuxiaoyang
 # @Time    : 2025/5/16 11:07
-# @Describe: FedSmart - Intelligent Adaptive Federated Learning (Simple but Powerful)
+# @Describe: FedSPD - 基于特征对齐和互信息最大化的联邦知识蒸馏
+
 import torch
 import numpy as np
 from tqdm import tqdm
 import torch.nn.functional as F
 import torch.nn as nn
 from fl.client.fl_base import BaseClient
+from scipy.spatial import distance
 
 class FedSPD(BaseClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # FedSmart核心参数 - 简单但强力
-        self.temperature = kwargs.get('temperature', 3.0)       # 蒸馏温度
-        self.kd_weight = kwargs.get('kd_weight', 0.5)           # 知识蒸馏权重
-        self.momentum = kwargs.get('momentum', 0.9)             # 模型动量
-        self.adaptive_lr = kwargs.get('adaptive_lr', True)      # 自适应学习率
+        # 核心知识蒸馏参数
+        self.temperature = kwargs.get('temperature', 0.07)     # 对比学习温度参数
+        self.proto_reg_weight = kwargs.get('proto_reg_weight', 0.5)  # 原型正则化权重
+        self.contrastive_weight = kwargs.get('contrastive_weight', 0.3)  # 对比损失权重
+        self.instance_weight = kwargs.get('instance_weight', 0.2)  # 实例对齐权重
         
-        # 自适应训练参数
+        # 特征蒸馏和抽取参数
+        self.feature_dim = kwargs.get('feature_dim', 128)      # 特征维度
+        self.queue_size = kwargs.get('queue_size', 128)        # 负样本队列大小
+        self.momentum_update = kwargs.get('momentum_update', 0.99)  # 动量更新系数
+        
+        # 训练参数
+        self.adaptive_lr = kwargs.get('adaptive_lr', True)     # 自适应学习率
         self.min_epochs = 1
-        self.max_epochs = min(self.epochs * 2, 10)              # 最大训练轮数
-        self.patience = 3                                       # 早停耐心
-        self.loss_threshold = 0.01                              # 损失变化阈值
+        self.max_epochs = 10
+        self.patience = 3
+        self.loss_threshold = 0.01
         
-        # 数据分布感知
-        self.local_data_stats = {}
-        self.data_heterogeneity = 0.0
+        # 初始化队列和特征银行
+        self.feature_queue = None
+        self.class_features = {}
         
-        # 模型动量缓存
-        self.momentum_params = None
-        self.prev_global_params = None
-        
-        # 简单有效的损失函数
+        # 标准损失函数
         self.ce_loss = nn.CrossEntropyLoss()
-        self.kl_loss = nn.KLDivLoss(reduction='batchmean')
         
-        print(f"🚀 FedSmart客户端 {self.client_id} 初始化完成")
+        print(f"🚀 FedSPD客户端 {self.client_id} 初始化完成")
+        
+    def _setup_feature_extractor(self):
+        """
+        设置特征提取器 - 使用模型的中间层作为特征提取器
+        
+        注意：现在使用模型的原生方法，不再需要动态添加方法
+        """
+        # 检查模型是否支持特征提取
+        if not hasattr(self.model, 'get_features') and not hasattr(self.model, 'forward'):
+            print(f"⚠️ 警告: 模型 {type(self.model).__name__} 不支持特征提取，将使用输出作为特征")
 
-    def local_train(self, sync_round: int, weights=None, global_reps=None, global_logits=None):
+    def _compute_contrastive_loss(self, features, labels, global_prototypes=None):
         """
-        FedSmart训练 - 智能自适应联邦学习
+        计算对比学习损失 - 基于InfoNCE
         
-        核心创新：
-        1. 自适应本地训练轮数
-        2. 模型动量更新
-        3. 简单但有效的知识蒸馏
-        4. 数据分布感知学习率调整
+        理论基础:
+        对比学习通过最大化正样本之间的互信息和最小化负样本之间的互信息来学习表示
+        
+        数学公式:
+        L_con = -log[ exp(sim(f_i, p_i)/τ) / (exp(sim(f_i, p_i)/τ) + Σ_j≠i exp(sim(f_i, p_j)/τ)) ]
+        
+        其中:
+        - f_i是样本i的特征表示
+        - p_i是样本i所属类别的原型
+        - τ是温度参数
+        - sim是余弦相似度函数
         """
+        if global_prototypes is None or not global_prototypes:
+            return torch.tensor(0.0, device=self.device)
         
-        # 1. 更新模型权重和动量
+        # 确保特征为二维张量
+        if features.dim() > 2:
+            features = features.view(features.size(0), -1)
+        
+        # L2归一化
+        features = F.normalize(features, dim=1)
+        
+        # 收集所有可用的原型
+        prototype_vectors = []
+        proto_labels = []
+        
+        for label in labels.unique():
+            label_val = label.item()
+            if label_val in global_prototypes:
+                proto = torch.tensor(global_prototypes[label_val], 
+                                    device=self.device, 
+                                    dtype=torch.float32)
+                prototype_vectors.append(proto)
+                proto_labels.append(label_val)
+        
+        if not prototype_vectors:
+            return torch.tensor(0.0, device=self.device)
+            
+        # 堆叠原型
+        prototypes = torch.stack(prototype_vectors)
+        prototypes = F.normalize(prototypes, dim=1)
+        proto_labels = torch.tensor(proto_labels, device=self.device)
+        
+        # 计算特征与所有原型的相似度
+        similarity = torch.matmul(features, prototypes.t()) / self.temperature
+        
+        # 计算对比损失
+        losses = []
+        for i, label in enumerate(labels):
+            label_val = label.item()
+            
+            # 检查该类别是否有原型
+            if label_val not in global_prototypes:
+                continue
+                
+            # 找到正样本原型的索引
+            positive_idx = (proto_labels == label_val).nonzero(as_tuple=True)[0]
+            
+            if len(positive_idx) == 0:
+                continue
+                
+            # 计算对比损失
+            logits = similarity[i]
+            exp_logits = torch.exp(logits)
+            pos_exp_logits = exp_logits[positive_idx]
+            
+            # InfoNCE公式
+            loss_i = -torch.log(
+                pos_exp_logits / (torch.sum(exp_logits) + 1e-8)
+            )
+            losses.append(loss_i.mean())
+        
+        if losses:
+            return torch.stack(losses).mean()
+        else:
+            return torch.tensor(0.0, device=self.device)
+
+    def _compute_prototype_reg_loss(self, features, labels, global_prototypes=None, global_covariances=None):
+        """
+        计算原型正则化损失 - 基于Wasserstein距离
+        
+        理论基础:
+        鼓励局部特征与全局原型对齐，同时考虑协方差结构
+        
+        数学公式:
+        L_proto = Σ_c W₂(μ_c^l, μ_c^g)
+        
+        其中:
+        - μ_c^l是局部类别原型
+        - μ_c^g是全局类别原型
+        - W₂是简化的Wasserstein距离
+        """
+        if global_prototypes is None or not global_prototypes:
+            return torch.tensor(0.0, device=self.device)
+        
+        if features.dim() > 2:
+            features = features.view(features.size(0), -1)
+        
+        # 计算类别原型
+        losses = []
+        for c in labels.unique():
+            c_val = c.item()
+            
+            # 检查该类别是否有全局原型
+            if c_val not in global_prototypes:
+                continue
+                
+            # 获取该类别的特征
+            c_mask = (labels == c)
+            if not c_mask.any():
+                continue
+                
+            c_features = features[c_mask]
+            
+            # 计算局部原型
+            local_proto = c_features.mean(dim=0)
+            
+            # 获取全局原型
+            global_proto = torch.tensor(
+                global_prototypes[c_val], 
+                device=self.device,
+                dtype=torch.float32
+            )
+            
+            # 计算原型之间的距离 (Wasserstein距离简化版)
+            proto_dist = F.mse_loss(local_proto, global_proto)
+            
+            # 如果有协方差信息，考虑协方差对齐
+            if global_covariances is not None and c_val in global_covariances:
+                # 计算局部协方差
+                if c_features.size(0) > 1:
+                    c_centered = c_features - local_proto.unsqueeze(0)
+                    local_cov = torch.matmul(c_centered.t(), c_centered) / (c_features.size(0) - 1)
+                    
+                    # 获取全局协方差
+                    global_cov = torch.tensor(
+                        global_covariances[c_val],
+                        device=self.device,
+                        dtype=torch.float32
+                    )
+                    
+                    # Frobenius范数作为协方差差异
+                    cov_dist = torch.norm(local_cov - global_cov, p='fro')
+                    
+                    # 综合原型和协方差距离
+                    total_dist = proto_dist + 0.1 * cov_dist
+                else:
+                    total_dist = proto_dist
+            else:
+                total_dist = proto_dist
+                
+            losses.append(total_dist)
+        
+        if losses:
+            return torch.stack(losses).mean()
+        else:
+            return torch.tensor(0.0, device=self.device)
+
+    def _compute_instance_alignment_loss(self, features, labels, global_prototypes=None):
+        """
+        计算实例对齐损失 - 基于软分配
+        
+        理论基础:
+        通过软分配机制将局部实例与全局原型对齐
+        
+        数学公式:
+        L_inst = -Σ_i Σ_c q_ic log p_ic
+        
+        其中:
+        - q_ic是样本i对原型c的软分配
+        - p_ic是模型预测的样本i对类别c的概率
+        """
+        if global_prototypes is None or not global_prototypes:
+            return torch.tensor(0.0, device=self.device)
+        
+        if features.dim() > 2:
+            features = features.view(features.size(0), -1)
+        
+        # 收集所有原型
+        prototypes = []
+        proto_classes = []
+        
+        for c, proto in global_prototypes.items():
+            prototypes.append(torch.tensor(proto, device=self.device, dtype=torch.float32))
+            proto_classes.append(c)
+            
+        if not prototypes:
+            return torch.tensor(0.0, device=self.device)
+            
+        # 堆叠所有原型
+        prototypes = torch.stack(prototypes)
+        proto_classes = torch.tensor(proto_classes, device=self.device)
+        
+        # L2归一化
+        features = F.normalize(features, dim=1)
+        prototypes = F.normalize(prototypes, dim=1)
+        
+        # 计算每个样本与所有原型的余弦相似度
+        similarity = torch.matmul(features, prototypes.t())
+        
+        # 使用softmax生成软分配
+        soft_assign = F.softmax(similarity / self.temperature, dim=1)
+        
+        # 创建标签的one-hot编码
+        num_classes = len(proto_classes)
+        one_hot = torch.zeros(labels.size(0), num_classes, device=self.device)
+        
+        # 将标签映射到原型索引
+        label_to_idx = {proto_classes[i].item(): i for i in range(len(proto_classes))}
+        
+        # 填充one-hot编码
+        for i, label in enumerate(labels):
+            label_val = label.item()
+            if label_val in label_to_idx:
+                one_hot[i, label_to_idx[label_val]] = 1.0
+        
+        # 计算交叉熵损失
+        instance_loss = -torch.sum(one_hot * torch.log(soft_assign + 1e-8)) / labels.size(0)
+        
+        return instance_loss
+
+    def _collect_features(self, features, labels):
+        """收集特征用于后续分析"""
+        # 确保特征是2D
+        if features.dim() > 2:
+            features = features.view(features.size(0), -1)
+            
+        # 按类别收集特征
+        for i, label in enumerate(labels):
+            y = label.item()
+            if y not in self.class_features:
+                self.class_features[y] = []
+            self.class_features[y].append(features[i].detach().cpu().numpy())
+
+    def _adaptive_epochs(self, sync_round):
+        """确定自适应训练轮数"""
+        if sync_round <= 5:
+            return min(self.max_epochs, max(self.min_epochs, 3))
+        elif sync_round <= 15:
+            return min(self.max_epochs, max(self.min_epochs, 2))
+        else:
+            return max(self.min_epochs, 1)
+
+    def local_train(self, sync_round: int, weights=None, global_prototypes=None, global_covariances=None):
+        """
+        FedSPD训练 - 基于特征对齐和互信息最大化的联邦知识蒸馏
+        
+        核心步骤:
+        1. 初始化特征提取器
+        2. 更新模型权重
+        3. 确定自适应训练轮数
+        4. 进行特征对齐训练
+        5. 收集特征用于后续聚合
+        
+        返回:
+        - 模型权重
+        - 样本数量
+        - 训练损失
+        - 类特征字典
+        - 类标签
+        """
+        # 1. 确保特征提取器设置完成
+        self._setup_feature_extractor()
+        
+        # 2. 更新模型权重
         if weights is not None:
-            self._smart_model_update(weights, sync_round)
-        
-        # 2. 分析本地数据分布
-        self._analyze_local_data()
+            self.update_weights(weights)
         
         # 3. 自适应确定训练轮数
-        adaptive_epochs = self._compute_adaptive_epochs(sync_round)
+        adaptive_epochs = self.epochs
         
-        # 4. 自适应学习率
-        if self.adaptive_lr:
-            self._adjust_learning_rate(sync_round)
         
-        # 5. 开始智能训练
+        
+        # 5. 清空特征收集
+        self.class_features = {}
+        
+        # 6. 开始训练
         self.model.train()
         total_loss = 0
+        total_ce_loss = 0
+        total_contrastive_loss = 0
+        total_proto_loss = 0
+        total_instance_loss = 0
         num_sample = len(self.train_loader.dataset)
-        
-        # 收集类别数据
-        class_reps = {}
-        class_logits = {}
         
         # 早停机制
         prev_loss = float('inf')
         patience_counter = 0
         
-        print(f"📊 客户端 {self.client_id}: 自适应轮数={adaptive_epochs}, 异构度={self.data_heterogeneity:.3f}")
+        print(f"📊 客户端 {self.client_id}: 自适应轮数={adaptive_epochs}")
         
         with tqdm(
             total=adaptive_epochs * len(self.train_loader),
-            desc=f"Client {self.client_id} FedSmart Training"
+            desc=f"Client {self.client_id} FedSPD Training"
         ) as pbar:
             
             for epoch in range(adaptive_epochs):
                 epoch_loss = 0
-                epoch_ce_loss = 0
-                epoch_kd_loss = 0
                 
                 for batch_idx, (data, target) in enumerate(self.train_loader):
                     data, target = data.to(self.device), target.to(self.device)
                     self.optimizer.zero_grad()
                     
-                    # 前向传播
+                    # 前向传播 - 获取特征和输出
                     if hasattr(self.model, 'forward') and 'return_all' in self.model.forward.__code__.co_varnames:
-                        hidden, repout, output = self.model(data, return_all=True)
+                        # 如果模型支持直接返回所有特征
+                        hidden, features, output = self.model(data, return_all=True)
+                    elif hasattr(self.model, 'get_features'):
+                        # 使用get_features方法提取特征，然后获取输出
+                        features = self.model.get_features(data)
+                        if hasattr(self.model, 'get_hidden') and hasattr(self.model, 'classify'):
+                            hidden = self.model.get_hidden(features)
+                            output = self.model.classify(hidden)
+                        else:
+                            # 如果没有明确的hidden层，直接使用features
+                            hidden = features
+                            output = self.model(data)
                     else:
+                        # 回退到标准前向传播
                         output = self.model(data)
-                        hidden = repout = output  # fallback
+                        features = output  # 回退
+                        hidden = features
                     
-                    # 1. 监督学习损失
+                    # 1. 标准交叉熵损失
                     ce_loss = self.ce_loss(output, target)
                     
-                    # 2. 智能知识蒸馏
-                    kd_loss = self._compute_smart_kd_loss(output, target, global_logits)
+                    # 2. 特征对齐损失
+                    contrastive_loss = self._compute_contrastive_loss(
+                        features, target, global_prototypes
+                    )
                     
-                    # 3. 自适应损失权重
-                    adaptive_kd_weight = self._compute_adaptive_kd_weight(sync_round, kd_loss, ce_loss)
+                    # 3. 原型正则化损失
+                    proto_loss = self._compute_prototype_reg_loss(
+                        features, target, global_prototypes, global_covariances
+                    )
                     
-                    # 4. 总损失
-                    total_batch_loss = ce_loss + adaptive_kd_weight * kd_loss
+                    # 4. 实例对齐损失
+                    instance_loss = self._compute_instance_alignment_loss(
+                        features, target, global_prototypes
+                    )
+                    
+                    # 5. 总损失
+                    total_batch_loss = (
+                        ce_loss + 
+                        self.contrastive_weight * contrastive_loss +
+                        self.proto_reg_weight * proto_loss +
+                        self.instance_weight * instance_loss
+                    )
                     
                     # 反向传播
                     total_batch_loss.backward()
                     
-                    # 梯度裁剪（防止梯度爆炸）
+                    # 梯度裁剪
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     
                     self.optimizer.step()
                     
-                    # 收集数据（最后一个epoch）
+                    # 收集特征（最后一个epoch）
                     if epoch == adaptive_epochs - 1:
-                        self._collect_class_data(target, repout, output, class_reps, class_logits)
+                        self._collect_features(features.detach(), target)
                     
                     # 记录损失
                     epoch_loss += total_batch_loss.item()
-                    epoch_ce_loss += ce_loss.item()
-                    epoch_kd_loss += kd_loss.item() if isinstance(kd_loss, torch.Tensor) else 0
+                    total_ce_loss += ce_loss.item()
+                    total_contrastive_loss += contrastive_loss.item() if isinstance(contrastive_loss, torch.Tensor) else 0
+                    total_proto_loss += proto_loss.item() if isinstance(proto_loss, torch.Tensor) else 0
+                    total_instance_loss += instance_loss.item() if isinstance(instance_loss, torch.Tensor) else 0
                     
+                    current_lr = self.optimizer.param_groups[0]['lr']
                     pbar.update(1)
                     pbar.set_postfix({
                         'epoch': f"{epoch+1}/{adaptive_epochs}",
                         'ce': f"{ce_loss.item():.4f}",
-                        'kd': f"{kd_loss.item() if isinstance(kd_loss, torch.Tensor) else 0:.4f}",
-                        'α': f"{adaptive_kd_weight:.3f}"
+                        'con': f"{contrastive_loss.item() if isinstance(contrastive_loss, torch.Tensor) else 0:.4f}",
+                        'proto': f"{proto_loss.item() if isinstance(proto_loss, torch.Tensor) else 0:.4f}",
+                        'lr': f"{current_lr:.6f}"
                     })
                 
                 avg_epoch_loss = epoch_loss / len(self.train_loader)
@@ -150,200 +447,22 @@ class FedSPD(BaseClient):
                     patience_counter = 0
                     
                 prev_loss = avg_epoch_loss
+        self.scheduler.step()
+        # 7. 计算平均损失
+        num_batches = adaptive_epochs * len(self.train_loader)
+        avg_loss = total_loss / num_batches
+        avg_ce_loss = total_ce_loss / num_batches
+        avg_contrastive_loss = total_contrastive_loss / num_batches
+        avg_proto_loss = total_proto_loss / num_batches
+        avg_instance_loss = total_instance_loss / num_batches
         
-        # 6. 计算平均类别输出
-        avg_class_reps, avg_class_logits = self._compute_average_class_outputs(
-            class_reps, class_logits
-        )
+        print(f"✅ 客户端 {self.client_id} 训练完成: 总损失={avg_loss:.4f}, CE={avg_ce_loss:.4f}, " +
+              f"对比={avg_contrastive_loss:.4f}, 原型={avg_proto_loss:.4f}, 实例={avg_instance_loss:.4f}")
         
-        # 7. 返回结果
+        # 8. 返回结果
         model_weights = self.get_weights(return_numpy=True)
-        avg_loss = total_loss / (len(self.train_loader) * adaptive_epochs)
         
-        print(f"✅ 客户端 {self.client_id} 训练完成: 损失={avg_loss:.4f}")
+        # 返回类别标签
+        class_labels = list(self.class_features.keys())
         
-        return model_weights, num_sample, avg_loss, avg_class_reps, avg_class_logits
-
-    def _smart_model_update(self, weights, sync_round):
-        """智能模型更新 - 带动量的平滑更新"""
-        self.update_weights(weights)
-        
-        # 保存当前全局参数
-        current_global_params = {}
-        for name, param in self.model.named_parameters():
-            current_global_params[name] = param.data.clone()
-        
-        # 如果有历史参数，使用动量更新
-        if self.prev_global_params is not None and sync_round > 1:
-            for name, param in self.model.named_parameters():
-                if name in self.prev_global_params:
-                    # 计算全局模型的变化
-                    global_change = current_global_params[name] - self.prev_global_params[name]
-                    
-                    # 动量更新
-                    if self.momentum_params is None:
-                        self.momentum_params = {}
-                    
-                    if name not in self.momentum_params:
-                        self.momentum_params[name] = torch.zeros_like(global_change)
-                    
-                    self.momentum_params[name] = (
-                        self.momentum * self.momentum_params[name] + 
-                        (1 - self.momentum) * global_change
-                    )
-                    
-                    # 应用动量
-                    param.data = current_global_params[name] + 0.1 * self.momentum_params[name]
-        
-        self.prev_global_params = current_global_params
-
-    def _analyze_local_data(self):
-        """分析本地数据分布"""
-        class_counts = {}
-        total_samples = 0
-        
-        for _, target in self.train_loader:
-            for t in target:
-                y = t.item()
-                class_counts[y] = class_counts.get(y, 0) + 1
-                total_samples += 1
-        
-        # 计算数据异构度（基于类别分布的熵）
-        if len(class_counts) > 1:
-            probs = np.array(list(class_counts.values())) / total_samples
-            entropy = -np.sum(probs * np.log(probs + 1e-8))
-            max_entropy = np.log(len(class_counts))
-            self.data_heterogeneity = 1.0 - entropy / max_entropy  # 异构度：0=均匀分布，1=单一类别
-        else:
-            self.data_heterogeneity = 1.0
-        
-        self.local_data_stats = {
-            'class_counts': class_counts,
-            'total_samples': total_samples,
-            'num_classes': len(class_counts),
-            'heterogeneity': self.data_heterogeneity
-        }
-
-    def _compute_adaptive_epochs(self, sync_round):
-        """自适应计算训练轮数"""
-        base_epochs = self.epochs
-        
-        # 基于数据异构度调整
-        if self.data_heterogeneity > 0.8:  # 高异构度
-            epochs_factor = 1.5
-        elif self.data_heterogeneity > 0.5:  # 中异构度
-            epochs_factor = 1.2
-        else:  # 低异构度
-            epochs_factor = 1.0
-        
-        # 基于轮次调整（早期多训练，后期少训练）
-        if sync_round <= 5:
-            round_factor = 1.3
-        elif sync_round <= 15:
-            round_factor = 1.0
-        else:
-            round_factor = 0.8
-        
-        adaptive_epochs = int(base_epochs * epochs_factor * round_factor)
-        return max(self.min_epochs, min(adaptive_epochs, self.max_epochs))
-
-    def _adjust_learning_rate(self, sync_round):
-        """自适应调整学习率"""
-        # 基于轮次的学习率衰减
-        if sync_round <= 10:
-            lr_factor = 1.0
-        elif sync_round <= 30:
-            lr_factor = 0.8
-        else:
-            lr_factor = 0.6
-        
-        # 基于数据异构度调整
-        if self.data_heterogeneity > 0.7:
-            lr_factor *= 0.8  # 高异构度降低学习率
-        lr_factor = 0.6
-        # 更新优化器学习率
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = param_group.get('initial_lr', param_group['lr']) * lr_factor
-
-    def _compute_smart_kd_loss(self, student_logits, target, global_logits):
-        """智能知识蒸馏损失 - 简单但有效"""
-        if not global_logits:
-            return torch.tensor(0.0, device=self.device)
-        
-        kd_losses = []
-        
-        for i, t in enumerate(target):
-            class_id = t.item()
-            
-            if class_id in global_logits:
-                # 获取全局知识
-                teacher_logits = torch.tensor(
-                    global_logits[class_id], 
-                    device=self.device, 
-                    dtype=torch.float32
-                ).unsqueeze(0)
-                
-                student_logit = student_logits[i].unsqueeze(0)
-                
-                # 简单KL散度损失
-                teacher_prob = F.softmax(teacher_logits / self.temperature, dim=1)
-                student_log_prob = F.log_softmax(student_logit / self.temperature, dim=1)
-                
-                kd_loss = self.kl_loss(student_log_prob, teacher_prob.detach())
-                kd_loss *= (self.temperature ** 2)
-                
-                kd_losses.append(kd_loss)
-        
-        return torch.stack(kd_losses).mean() if kd_losses else torch.tensor(0.0, device=self.device)
-
-    def _compute_adaptive_kd_weight(self, sync_round, kd_loss, ce_loss):
-        """自适应计算知识蒸馏权重"""
-        base_weight = self.kd_weight
-        
-        # 基于损失比例调整
-        if isinstance(kd_loss, torch.Tensor) and kd_loss.item() > 0:
-            loss_ratio = ce_loss.item() / (kd_loss.item() + 1e-8)
-            if loss_ratio > 10:  # CE损失远大于KD损失
-                ratio_factor = 2.0
-            elif loss_ratio > 3:
-                ratio_factor = 1.5
-            else:
-                ratio_factor = 1.0
-        else:
-            ratio_factor = 0.0
-        
-        # 基于轮次调整
-        if sync_round <= 3:
-            round_factor = 2.0  # 早期更依赖知识蒸馏
-        elif sync_round <= 10:
-            round_factor = 1.0
-        else:
-            round_factor = 0.5  # 后期减少知识蒸馏
-        
-        # 基于数据异构度调整
-        hetero_factor = 1.0 + self.data_heterogeneity  # 异构度越高，越需要知识蒸馏
-        
-        adaptive_weight = base_weight * ratio_factor * round_factor * hetero_factor
-        return min(adaptive_weight, 2.0)  # 限制最大权重
-
-    def _collect_class_data(self, target, repout, output, class_reps, class_logits):
-        """收集类别数据"""
-        for i, t in enumerate(target):
-            y = t.item()
-            if y not in class_reps:
-                class_reps[y] = []
-                class_logits[y] = []
-            class_reps[y].append(repout[i].detach().cpu().numpy())
-            class_logits[y].append(output[i].detach().cpu().numpy())
-
-    def _compute_average_class_outputs(self, class_reps, class_logits):
-        """计算平均类别输出"""
-        avg_class_reps = {}
-        avg_class_logits = {}
-        
-        for y in class_reps:
-            if class_reps[y]:
-                avg_class_reps[y] = np.mean(np.array(class_reps[y]), axis=0)
-                avg_class_logits[y] = np.mean(np.array(class_logits[y]), axis=0)
-        
-        return avg_class_reps, avg_class_logits
+        return model_weights, num_sample, avg_loss, self.class_features, class_labels
