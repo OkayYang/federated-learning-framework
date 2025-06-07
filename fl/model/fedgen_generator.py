@@ -2,12 +2,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-class Generator(nn.Module):
+class FedGenGenerator(nn.Module):
     """
     生成器模型，用于生成合成数据样本
     """
     def __init__(self, feature_dim, num_classes,noise_dim=64, hidden_dim=256):
-        super(Generator, self).__init__()
+        super(FedGenGenerator, self).__init__()
         self.noise_dim = noise_dim
         self.feature_dim = feature_dim
         self.num_classes = num_classes

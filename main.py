@@ -18,7 +18,7 @@ from fl.data import datasets
 from fl.client.fl_base import ModelConfig
 from fl.server.fl_server import FLServer
 from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet, ResNet18_CIFAR10, ResNet18_CIFAR100, ResNet18_TinyImageNet, TinyImageNetNet
-from fl.model.generator import Generator
+from fl.model.fedgen_generator import FedGenGenerator
 from fl.model.fedftg_generator import create_fedftg_generator
 from fl.utils import (
     optim_wrapper,
@@ -153,7 +153,7 @@ def train_federated_model(args):
     if args.strategy.lower() == 'fedgen':
         strategy_params['feature_dim'] = feature_dim
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        generator = Generator(
+        generator = FedGenGenerator(
             feature_dim=feature_dim,
             num_classes=num_classes,
         ).to(device)
@@ -235,7 +235,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
 
      # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='fedftg',
+    parser.add_argument('--strategy', type=str, default='fedgen',
                         choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone', 'fedftg'],
                         help='联邦学习策略')
     
@@ -249,7 +249,7 @@ def parse_arguments():
                         help='当使用MNIST/CIFAR数据集时的客户端数量')
     parser.add_argument('--dir_beta', type=float, default=0.3,
                         help='当使用dirichlet划分方式时的狄利克雷分布的参数')
-    parser.add_argument('--data_fraction', type=float, default=1,
+    parser.add_argument('--data_fraction', type=float, default=0.1,
                         help='数据集采样比例')
     
     # 训练相关参数

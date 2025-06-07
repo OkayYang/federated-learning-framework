@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from fl.server.strategy.strategy_base import AggregationStrategy
 from fl.aggregation.aggregator import average_weight
-from fl.model.generator import Generator
+from fl.model.fedgen_generator import FedGenGenerator
 
 class FedGenStrategy(AggregationStrategy):
     """

@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
 from fl.client.fl_base import BaseClient
-from fl.model.generator import Generator
+from fl.model.fedgen_generator import FedGenGenerator
 
 class FedGen(BaseClient):
     def __init__(self, *args, **kwargs):
@@ -27,7 +27,7 @@ class FedGen(BaseClient):
         self.temperature = kwargs.get('temperature', 1.0)  # 温度用于软化概率分布
         self.init_generator = self.kwargs.get('generator_model')
         # 初始化生成器
-        self.generator = Generator(
+        self.generator = FedGenGenerator(
             feature_dim=self.feature_dim,
             num_classes=self.num_classes,
         ).to(self.device)
