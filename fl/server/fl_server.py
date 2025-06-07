@@ -81,10 +81,44 @@ class FLServer:
         """更新全局模型的权重"""
         if len(weights) != len(self.global_model.state_dict()):
             raise ValueError("传入的权重数组数量与全局模型参数数量不匹配。")
+        
         keys = self.global_model.state_dict().keys()
         weights_dict = {}
+        
+        # 更健壮的权重转换
         for k, v in zip(keys, weights):
-            weights_dict[k] = torch.Tensor(np.copy(v)).to(self.device)
+            # 确保权重是有效的浮点型数组
+            try:
+                # 首先确保是numpy数组
+                if not isinstance(v, np.ndarray):
+                    v = np.array(v)
+                    
+                # 检查数据类型，确保是浮点类型
+                if not np.issubdtype(v.dtype, np.floating):
+                    print(f"警告: 权重 {k} 的数据类型为 {v.dtype}，转换为 float32")
+                    v = v.astype(np.float32)
+                
+                # 检查是否有无效值
+                if not np.all(np.isfinite(v)):
+                    print(f"警告: 权重 {k} 包含无效值 (NaN 或 Inf)")
+                    # 使用原始模型的权重
+                    v = self.global_model.state_dict()[k].cpu().numpy()
+                
+                # 检查形状是否有效
+                if 0 in v.shape or np.any(np.array(v.shape) < 0):
+                    print(f"警告: 权重 {k} 的形状 {v.shape} 无效")
+                    # 使用原始模型的权重
+                    v = self.global_model.state_dict()[k].cpu().numpy()
+                
+                # 转换为张量并移至设备
+                weights_dict[k] = torch.tensor(v, dtype=torch.float32).to(self.device)
+                
+            except Exception as e:
+                print(f"更新权重 {k} 时出错: {str(e)}")
+                # 使用原始模型的权重
+                weights_dict[k] = self.global_model.state_dict()[k]
+        
+        # 加载更新后的权重字典
         self.global_model.load_state_dict(weights_dict)
     
     def global_evaluate(self, test_dataset=None):

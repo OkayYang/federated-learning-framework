@@ -4,15 +4,17 @@
 # @Describe: 聚合策略工厂
 
 from fl.server.strategy.strategy import (
-    FedAvgStrategy,
+    AggregationStrategy, 
+    FedAloneStrategy,
+    FedAvgStrategy, 
     FedProxStrategy,
     MoonStrategy,
     ScaffoldStrategy,
     FedDistillStrategy,
     FedGenStrategy,
-    FedSPDStrategy,
-    FedAloneStrategy
+    FedSPDStrategy
 )
+from fl.server.strategy.fedftg_strategy import FedFTGStrategy
 
 
 class StrategyFactory:
@@ -38,7 +40,8 @@ class StrategyFactory:
             "feddistill": FedDistillStrategy(),
             "fedgen": FedGenStrategy(),
             "fedspd": FedSPDStrategy(),
-            "fedalone": FedAloneStrategy()
+            "fedalone": FedAloneStrategy(),
+            "fedftg": FedFTGStrategy()
         }
         
         if strategy_name.lower() not in strategy_map:

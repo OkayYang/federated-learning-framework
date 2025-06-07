@@ -19,6 +19,7 @@ from fl.client.fl_base import ModelConfig
 from fl.server.fl_server import FLServer
 from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet, ResNet18_CIFAR10, ResNet18_CIFAR100, ResNet18_TinyImageNet, TinyImageNetNet
 from fl.model.generator import Generator
+from fl.model.fedftg_generator import create_fedftg_generator
 from fl.utils import (
     optim_wrapper,
     scheduler_wrapper,
@@ -158,6 +159,31 @@ def train_federated_model(args):
         ).to(device)
         strategy_params['generator_model'] = generator
     
+    # 为FedFTG策略创建生成器
+    elif args.strategy.lower() == 'fedftg':
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # 根据数据集确定图像尺寸和通道数
+        if args.dataset.lower() in ['mnist', 'femnist']:
+            img_channels = 1
+            img_size = 28
+        else:  # cifar10, cifar100, tinyimagenet
+            img_channels = 3
+            img_size = 32 if args.dataset.lower() in ['cifar10', 'cifar100'] else 64
+            
+        # 创建FedFTG生成器
+        fedftg_generator = create_fedftg_generator(
+            model_type='standard',  # 可选 'standard' 或 'deepinversion'
+            z_dim=100,
+            num_classes=num_classes,
+            img_channels=img_channels,
+            img_size=img_size
+        )
+        
+        # 添加到策略参数
+        strategy_params['generator'] = fedftg_generator
+        strategy_params['generator_lr'] = 0.001
+        strategy_params['server_epochs'] = 5  # 服务器端训练轮数
+    
     # 配置模型和训练参数
     model_config = ModelConfig(
         model_fn=model_fn,  # 模型函数
@@ -209,8 +235,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
 
      # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='fedprox',
-                        choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone'],
+    parser.add_argument('--strategy', type=str, default='fedftg',
+                        choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone', 'fedftg'],
                         help='联邦学习策略')
     
     # 数据集相关参数

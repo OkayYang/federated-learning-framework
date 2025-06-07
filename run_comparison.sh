@@ -34,13 +34,13 @@ LOG_FILE="${LOG_DIR}/experiment_$(date +%Y%m%d_%H%M%S).log"
     # 获取要运行的算法列表
     if [ $# -eq 2 ]; then
         if [ "$2" = "all" ]; then
-            ALGORITHMS="fedavg,fedprox,moon,feddistill,fedgen,fedspd,fedalone"
+            ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,fedalone"
         else
             ALGORITHMS="$2"
         fi
     else
         # 默认运行所有算法
-        ALGORITHMS="fedavg,fedprox,moon,feddistill,fedgen,fedspd,fedalone"
+        ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,fedalone"
     fi
 
     # 验证数据集名称
@@ -56,7 +56,7 @@ LOG_FILE="${LOG_DIR}/experiment_$(date +%Y%m%d_%H%M%S).log"
     # 设置基本参数
     BATCH_SIZE=64    # 批处理大小
     LOCAL_EPOCHS=10  # 本地训练轮数
-    COMM_ROUNDS=50  # 通信轮数
+    COMM_ROUNDS=30  # 通信轮数
     RATIO_CLIENT=1  # 每轮参与训练的客户端比例
     LEARNING_RATE=0.01  # 学习率
     OPTIMIZER="adam"    # 优化器: adam, sgd

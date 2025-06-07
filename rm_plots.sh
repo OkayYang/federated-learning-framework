@@ -19,6 +19,8 @@ else
     rm -rf ./logs/femnist
     rm -rf ./logs/cifar10
     rm -rf ./logs/cifar100
+    rm -rf ./logs/tinyimagenet
+    rm -rf ./logs/**.log
     
     # 删除旧的图表和历史记录（兼容性）
     rm -f ./plots/*.png
