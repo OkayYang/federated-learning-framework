@@ -145,19 +145,81 @@ def train_federated_model(args):
         print(f"   - {args.comm_rounds}轮余弦退火")
 
 
-    # 创建FedProx和MOON算法的超参数
+    # 创建策略特定的超参数
     strategy_params = {}
     strategy_params['num_classes'] = num_classes
     
 
     if args.strategy.lower() == 'fedgen':
+        # 设置FedGen所需的参数
         strategy_params['feature_dim'] = feature_dim
+        strategy_params['num_classes'] = num_classes
+        strategy_params['dataset'] = args.dataset.lower()
+        
+        # 根据不同数据集设置不同参数
+        noise_dim = 10  # 默认噪声维度
+        hidden_dim = 256  # 默认隐藏层维度
+        
+        # 根据数据集类型设置生成器参数
+        if args.dataset.lower() == 'mnist':
+            alpha = 1.0
+            beta = 1.0
+            eta = 1.0
+            train_epochs = 10
+            train_batch_size = 32
+        elif args.dataset.lower() == 'femnist' or args.dataset.lower() == 'emnist':
+            alpha = 1.0
+            beta = 1.0
+            eta = 1.0
+            train_epochs = 10
+            train_batch_size = 32
+        elif args.dataset.lower() == 'cifar10':
+            alpha = 10.0
+            beta = 1.0
+            eta = 5.0
+            train_epochs = 20
+            train_batch_size = 32
+        elif args.dataset.lower() == 'cifar100':
+            alpha = 10.0
+            beta = 1.0
+            eta = 5.0
+            train_epochs = 50
+            train_batch_size = 32
+        else:  # 默认设置
+            alpha = 1.0
+            beta = 1.0
+            eta = 1.0
+            train_epochs = 10
+            train_batch_size = 32
+        
+        # 创建并配置生成器
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         generator = FedGenGenerator(
             feature_dim=feature_dim,
             num_classes=num_classes,
+            noise_dim=noise_dim,
+            hidden_dim=hidden_dim,
+            dataset_name=args.dataset.lower()
         ).to(device)
+        
+        # 配置生成器训练参数
+        generator.train_epochs = train_epochs
+        generator.train_batch_size = train_batch_size
+        generator.ensemble_alpha = alpha
+        generator.ensemble_beta = beta
+        generator.ensemble_eta = eta
+        
+        # 添加到策略参数
         strategy_params['generator_model'] = generator
+        
+        # 为客户端添加FedGen特定参数
+        strategy_params['alpha'] = alpha  # 知识蒸馏损失权重
+        strategy_params['beta'] = beta   # 生成器损失权重
+        strategy_params['temperature'] = 1.0  # 温度系数
+        
+        print(f"FedGen配置: dataset={args.dataset}, alpha={alpha}, beta={beta}, eta={eta}, "
+              f"noise_dim={noise_dim}, feature_dim={feature_dim}, "
+              f"train_epochs={train_epochs}, batch_size={train_batch_size}")
     
     # 为FedFTG策略创建生成器
     elif args.strategy.lower() == 'fedftg':

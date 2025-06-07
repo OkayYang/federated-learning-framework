@@ -135,9 +135,8 @@ class BaseClient(ABC):
     
     #获取模型副本
     def get_model_copy(self):
-        model_copy = copy.deepcopy(self.model)
-        model_copy.eval()
-        return model_copy
+        """返回模型的副本，用于FedGen等算法"""
+        return copy.deepcopy(self.model)
 
 
 class ModelConfig:
