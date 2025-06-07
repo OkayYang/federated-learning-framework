@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from fl.server.strategy.strategy import AggregationStrategy
+from fl.server.strategy.strategy_base import AggregationStrategy
 from fl.aggregation.aggregator import average_weight
 
 

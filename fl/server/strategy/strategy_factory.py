@@ -3,51 +3,56 @@
 # @Time    : 2025/05/19 16:30
 # @Describe: 聚合策略工厂
 
-from fl.server.strategy.strategy import (
+from fl.server.strategy.strategy_base import (
     AggregationStrategy, 
     FedAloneStrategy,
     FedAvgStrategy, 
     FedProxStrategy,
-    MoonStrategy,
-    ScaffoldStrategy,
-    FedDistillStrategy,
-    FedGenStrategy,
-    FedSPDStrategy
+    MoonStrategy
 )
 from fl.server.strategy.fedftg_strategy import FedFTGStrategy
-
+from fl.server.strategy.fedgen_strategy import FedGenStrategy
+from fl.server.strategy.fedspd_strategy import FedSPDStrategy
+from fl.server.strategy.scaffold_strategy import ScaffoldStrategy
+from fl.server.strategy.feddistill_strategy import FedDistillStrategy
 
 class StrategyFactory:
     """聚合策略工厂"""
     
     @staticmethod
-    def get_strategy(strategy_name, server_kwargs):
+    def get_strategy(strategy_name, kwargs=None):
         """
-        根据策略名称获取对应的聚合策略实例
-        
-        Args:
-            strategy_name: 策略名称
-            server_kwargs: 服务器初始化时传入的参数
+        根据策略名称获取聚合策略实例
+        :param strategy_name: 策略名称, eg. FedAvg, FedProx
+        :return: 策略实例
+        """
+        if kwargs is None:
+            kwargs = {}
             
-        Returns:
-            AggregationStrategy: 聚合策略实例
-        """
-        strategy_map = {
-            "fedavg": FedAvgStrategy(),
-            "fedprox": FedProxStrategy(),
-            "moon": MoonStrategy(),
-            "scaffold": ScaffoldStrategy(),
-            "feddistill": FedDistillStrategy(),
-            "fedgen": FedGenStrategy(),
-            "fedspd": FedSPDStrategy(),
-            "fedalone": FedAloneStrategy(),
-            "fedftg": FedFTGStrategy()
-        }
-        
-        if strategy_name.lower() not in strategy_map:
-            raise ValueError(f"不支持的策略: {strategy_name}")
-        
-        strategy = strategy_map[strategy_name.lower()]
-        strategy.initialize(server_kwargs)
-        
+        strategy_name = strategy_name.lower()
+        if strategy_name == "fedavg":
+            strategy = FedAvgStrategy()
+        elif strategy_name == "fedprox":
+            strategy = FedProxStrategy()
+        elif strategy_name == "moon":
+            strategy = MoonStrategy()
+        elif strategy_name == "fedalone":
+            strategy = FedAloneStrategy()
+        elif strategy_name == "scaffold":
+            strategy = ScaffoldStrategy()
+        elif strategy_name == "feddistill":
+            strategy = FedDistillStrategy()
+        elif strategy_name == "fedgen":
+            strategy = FedGenStrategy()
+        elif strategy_name == "fedspd":
+            strategy = FedSPDStrategy()
+        elif strategy_name == "fedftg":
+            strategy = FedFTGStrategy()
+        else:
+            raise ValueError(f"不支持的策略名称: {strategy_name}")
+            
+        # 初始化策略（如果有特定参数）
+        if hasattr(strategy, "initialize"):
+            strategy.initialize(kwargs)
+            
         return strategy 
