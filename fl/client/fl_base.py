@@ -24,6 +24,7 @@ class BaseClient(ABC):
         batch_size,
         train_loader,
         test_loader,
+        global_test_loader,
         scheduler,
         **kwargs,
     ):
@@ -37,6 +38,7 @@ class BaseClient(ABC):
         self.batch_size = batch_size
         self.train_loader = train_loader
         self.test_loader = test_loader
+        self.global_test_loader = global_test_loader
         self.kwargs = kwargs
         
         # 设置客户端特定的随机种子，确保环境隔离
@@ -61,33 +63,17 @@ class BaseClient(ABC):
         :param sync_round: 当前的通信轮次
         """
         pass
-
-    def evaluate(self, test_dataset=None):
+    def global_evaluate(self):
         """
-        评估模型性能
-        :param test_dataset: 可选的测试数据集，如果为None则使用客户端自己的测试数据
+        评估模型在全局测试集上的性能
         :return: (accuracy, test_loss)
         """
-        # 确保模型处于评估模式
         self.model.eval()
         correct = 0
         test_loss = 0
         total = 0
-        
-        # 根据输入选择测试数据集
-        if test_dataset is None:
-            test_loader = self.test_loader
-        else:
-            # 创建统一的数据加载器，确保评估条件一致
-            test_loader = DataLoader(
-                test_dataset, 
-                batch_size=self.batch_size, 
-                shuffle=False,  # 评估时不打乱数据顺序，确保一致性
-                drop_last=False  # 不丢弃最后一个批次
-            )
-
         with torch.no_grad():  # 不计算梯度
-            for data, target in test_loader:
+            for data, target in self.global_test_loader:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
                 
@@ -105,7 +91,35 @@ class BaseClient(ABC):
         avg_loss = test_loss / total if total > 0 else 0
         
         return accuracy, avg_loss
-
+    
+    def local_evaluate(self):
+        """
+        评估模型在本地测试集上的性能
+        :return: (accuracy, test_loss)
+        """
+        self.model.eval()
+        correct = 0
+        test_loss = 0
+        total = 0
+        with torch.no_grad():  # 不计算梯度
+            for data, target in self.test_loader:
+                data, target = data.to(self.device), target.to(self.device)
+                output = self.model(data)
+                
+                # 累加批次损失
+                batch_loss = self.loss(output, target).item()
+                test_loss += batch_loss * len(data)  # 按样本数加权
+                
+                # 计算预测准确度
+                _, predicted = torch.max(output.data, 1)
+                total += target.size(0)
+                correct += (predicted == target).sum().item()
+        
+        # 计算平均损失和准确率
+        accuracy = correct / total if total > 0 else 0
+        avg_loss = test_loss / total if total > 0 else 0
+        return accuracy, avg_loss
+    
     def get_weights(self, return_numpy=False):
         if not return_numpy:
             return {k: v.cpu() for k, v in self.model.state_dict().items()}

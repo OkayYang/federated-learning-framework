@@ -53,7 +53,7 @@ class FLServer:
             "global": {"train_loss": [], "test_accuracy": [], "test_loss": []},
             "local": {"train_loss": [], "test_accuracy": [], "test_loss": []},
             "workers": {
-                client: {"train_loss": [], "accuracy": [], "test_loss": []}
+                client: {"train_loss": [], "local_test_accuracy": [], "local_test_loss": [], "global_test_accuracy": [], "global_test_loss": []}
                 for client in client_list
             },
         }
@@ -61,9 +61,6 @@ class FLServer:
         
         # 创建聚合策略实例
         self.aggregation_strategy = StrategyFactory.get_strategy(strategy, kwargs)
-
-        # 设置全局测试数据集
-        self.global_test_dataset = client_dataset_dict["global"]["test_dataset"]
         
     
     def _set_seed(self, seed):
@@ -121,51 +118,6 @@ class FLServer:
         # 加载更新后的权重字典
         self.global_model.load_state_dict(weights_dict)
     
-    def global_evaluate(self, test_dataset=None):
-        """
-        使用全局模型评估数据集
-        :param test_dataset: 可选的测试数据集，如果为None则使用全局测试数据集
-        :return: (accuracy, test_loss)
-        """
-        # 确保全局模型处于评估模式
-        self.global_model.eval()
-        correct = 0
-        test_loss = 0
-        total = 0
-        
-        # 根据输入选择测试数据集
-        if test_dataset is None:
-            test_dataset = self.global_test_dataset
-        
-        # 创建统一的数据加载器，确保评估条件一致
-        test_loader = DataLoader(
-            test_dataset, 
-            batch_size=self.model_config.get_batch_size(), 
-            shuffle=False,  # 评估时不打乱数据顺序，确保一致性
-            drop_last=False  # 不丢弃最后一个批次
-        )
-
-        with torch.no_grad():  # 不计算梯度
-            for data, target in test_loader:
-                data, target = data.to(self.device), target.to(self.device)
-                output = self.global_model(data)
-                
-                # 累加批次损失
-                batch_loss = self.global_loss_fn(output, target).item()
-                test_loss += batch_loss * len(data)  # 按样本数加权
-                
-                # 计算预测准确度
-                _, predicted = torch.max(output.data, 1)
-                total += target.size(0)
-                correct += (predicted == target).sum().item()
-        
-        # 计算平均损失和准确率
-        accuracy = correct / total if total > 0 else 0
-        avg_loss = test_loss / total if total > 0 else 0
-        
-        return accuracy, avg_loss
-    
-    
             
     def initialize_client_weights(self):
         """设置服务器端的全局模型"""
@@ -208,18 +160,32 @@ class FLServer:
             
             # 更新全局模型权重
             self.update_global_model_weights(global_weight)
+
+            # 全局训练损失
+            avg_train_loss = sum(train_loss_list) / len(train_loss_list) if train_loss_list else 0
             
-            # 使用全局模型评估全局数据集
+            # 使用参与方模型在全局数据集上评估
             print("\nEvaluating global model on global dataset...")
-            global_test_accuracy, global_test_loss = self.global_evaluate()
+            client_global_accuracies = []
+            client_global_test_losses = []
+            for client_name, worker in tqdm(
+                selected_workers.items(), desc="Progress", unit="client"
+            ):
+                global_test_accuracy, global_test_loss = worker.global_evaluate()
+                client_global_accuracies.append(global_test_accuracy)
+                client_global_test_losses.append(global_test_loss)
+                self.history["workers"][client_name]["global_test_accuracy"].append(global_test_accuracy)
+                self.history["workers"][client_name]["global_test_loss"].append(global_test_loss)
+
+            avg_client_global_accuracy = sum(client_global_accuracies) / len(client_global_accuracies) if client_global_accuracies else 0
+            avg_client_global_test_loss = sum(client_global_test_losses) / len(client_global_test_losses) if client_global_test_losses else 0
             
             # 保存全局指标到历史记录中
-            avg_train_loss = sum(train_loss_list) / len(train_loss_list) if train_loss_list else 0
             self.history["global"]["train_loss"].append(avg_train_loss)
-            self.history["global"]["test_accuracy"].append(global_test_accuracy)
-            self.history["global"]["test_loss"].append(global_test_loss)
+            self.history["global"]["test_accuracy"].append(avg_client_global_accuracy)
+            self.history["global"]["test_loss"].append(avg_client_global_test_loss)
 
-            # 评估每个选中的客户端
+            # 评估每个选中的客户端在本地数据集上的性能
             print("\nEvaluating selected clients on local dataset...")
             client_accuracies = []
             client_test_losses = []
@@ -228,14 +194,14 @@ class FLServer:
                 selected_workers.items(), desc="Progress", unit="client"
             ):
                 # 在客户端自己的测试数据上评估
-                test_acc, test_loss = worker.evaluate()
+                test_acc, test_loss = worker.local_evaluate()
                 
                 client_accuracies.append(test_acc)
                 client_test_losses.append(test_loss)
                 
                 # 记录客户端历史数据
-                self.history["workers"][client_name]["accuracy"].append(test_acc)
-                self.history["workers"][client_name]["test_loss"].append(test_loss)
+                self.history["workers"][client_name]["local_test_accuracy"].append(test_acc)
+                self.history["workers"][client_name]["local_test_loss"].append(test_loss)
             
             # 计算客户端评估的平均值
             avg_client_accuracy = sum(client_accuracies) / len(client_accuracies) if client_accuracies else 0

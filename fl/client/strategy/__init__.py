@@ -55,8 +55,10 @@ def create_client(
     batch_size = model_config.get_batch_size()
 
     client_dataset = client_dataset_dict[client_id]
+    global_test_dataset = client_dataset_dict["global"]["test_dataset"]
     train_dataLoader = DataLoader(client_dataset['train_dataset'], batch_size=batch_size, shuffle=True,drop_last=True)
     test_dataLoader = DataLoader(client_dataset['test_dataset'], batch_size=batch_size, shuffle=True,drop_last=True)
+    global_test_dataLoader = DataLoader(global_test_dataset, batch_size=batch_size, shuffle=True,drop_last=True)
 
     strategy = strategy.lower()
     if strategy not in _strategy_map:
@@ -72,6 +74,7 @@ def create_client(
         batch_size,
         train_dataLoader,
         test_dataLoader,
+        global_test_dataLoader,
         scheduler,  # 传递调度器
         **kwargs
     )

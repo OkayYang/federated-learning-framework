@@ -97,6 +97,7 @@ def plot_global_metrics(history: dict, experiment_name: str):
 def plot_worker_metrics(history: dict, experiment_name: str):
     """
     将所有worker的训练损失、测试准确率和测试损失绘制在同一个图表上，使用插值法使曲线平滑
+    额外显示workers测试准确率和测试损失
     """
     # 从experiment_name中提取策略和数据集名称
     parts = experiment_name.split('_')
@@ -109,15 +110,15 @@ def plot_worker_metrics(history: dict, experiment_name: str):
     plots_dir = f"plots/{dataset}"
     os.makedirs(plots_dir, exist_ok=True)
 
-    # 创建一个大的图表，包含三个子图
-    plt.figure(figsize=(15, 15))
+    # 创建一个大的图表，包含五个子图
+    plt.figure(figsize=(15, 25))
     
     # 获取全局轮次数量作为x轴
     total_rounds = len(history["global"]["train_loss"])
     global_epochs = np.arange(1, total_rounds + 1)
 
     # 绘制训练损失比较
-    plt.subplot(3, 1, 1)
+    plt.subplot(5, 1, 1)
     for client_name, metrics in workers_history.items():
         # 记录客户端参与的轮次和对应的数据
         rounds_participated = []
@@ -160,14 +161,14 @@ def plot_worker_metrics(history: dict, experiment_name: str):
     plt.grid(True)
 
     # 绘制测试准确率比较
-    plt.subplot(3, 1, 2)
+    plt.subplot(5, 1, 2)
     for client_name, metrics in workers_history.items():
         # 记录客户端参与的轮次和对应的数据
         rounds_participated = []
         values = []
         
         # 收集客户端参与的轮次和对应的准确率
-        for i, acc in enumerate(metrics["accuracy"]):
+        for i, acc in enumerate(metrics["local_test_accuracy"]):
             rounds_participated.append(i + 1)  # 轮次从1开始
             values.append(acc)
         
@@ -198,19 +199,19 @@ def plot_worker_metrics(history: dict, experiment_name: str):
             )
     plt.xlabel("Epochs")
     plt.ylabel("Accuracy (%)")
-    plt.title(f"{strategy} Test Accuracy Comparison")
+    plt.title(f"{strategy} Local Test Accuracy Comparison")
     plt.legend()
     plt.grid(True)
 
     # 绘制测试损失比较
-    plt.subplot(3, 1, 3)
+    plt.subplot(5, 1, 3)
     for client_name, metrics in workers_history.items():
         # 记录客户端参与的轮次和对应的数据
         rounds_participated = []
         values = []
         
         # 收集客户端参与的轮次和对应的测试损失
-        for i, loss in enumerate(metrics["test_loss"]):
+        for i, loss in enumerate(metrics["local_test_loss"]):
             rounds_participated.append(i + 1)  # 轮次从1开始
             values.append(loss)
         
@@ -241,7 +242,93 @@ def plot_worker_metrics(history: dict, experiment_name: str):
             )
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
-    plt.title(f"{strategy} Test Loss Comparison")
+    plt.title(f"{strategy} Local Test Loss Comparison")
+    plt.legend()
+    plt.grid(True)
+    
+    # 绘制workers的测试准确率平均值
+    plt.subplot(5, 1, 4)
+    for client_name, metrics in workers_history.items():
+        # 记录客户端参与的轮次和对应的数据
+        rounds_participated = []
+        values = []
+        
+        # 收集客户端参与的轮次和对应的测试损失
+        for i, loss in enumerate(metrics["global_test_loss"]):
+            rounds_participated.append(i + 1)  # 轮次从1开始
+            values.append(loss)
+        
+        # 如果客户端至少参与了一轮训练
+        if rounds_participated:
+            # 使用scipy的插值函数
+            from scipy import interpolate
+            
+            # 如果只有一个数据点，则复制该点作为第二个点
+            if len(rounds_participated) == 1:
+                rounds_participated.append(rounds_participated[0] + 0.1)
+                values.append(values[0])
+            
+            # 创建插值函数
+            f = interpolate.interp1d(rounds_participated, values, kind='linear', 
+                                     bounds_error=False, fill_value=(values[0], values[-1]))
+            
+            # 生成插值后的数据
+            smooth_values = f(global_epochs)
+            
+            # 绘制平滑曲线
+            plt.plot(
+                global_epochs,
+                smooth_values,
+                label=f"{client_name}",
+                marker='s',
+                markersize=3
+            )
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title(f"{strategy} Global Test Loss Comparison")
+    plt.legend()
+    plt.grid(True)
+    
+    # 绘制workers的测试损失平均值
+    plt.subplot(5, 1, 5)
+    for client_name, metrics in workers_history.items():
+        # 记录客户端参与的轮次和对应的数据
+        rounds_participated = []
+        values = []
+        
+        # 收集客户端参与的轮次和对应的测试损失
+        for i, loss in enumerate(metrics["global_test_loss"]):
+            rounds_participated.append(i + 1)  # 轮次从1开始
+            values.append(loss)
+        
+        # 如果客户端至少参与了一轮训练
+        if rounds_participated:
+            # 使用scipy的插值函数
+            from scipy import interpolate
+            
+            # 如果只有一个数据点，则复制该点作为第二个点
+            if len(rounds_participated) == 1:
+                rounds_participated.append(rounds_participated[0] + 0.1)
+                values.append(values[0])
+            
+            # 创建插值函数
+            f = interpolate.interp1d(rounds_participated, values, kind='linear', 
+                                     bounds_error=False, fill_value=(values[0], values[-1]))
+            
+            # 生成插值后的数据
+            smooth_values = f(global_epochs)
+            
+            # 绘制平滑曲线
+            plt.plot(
+                global_epochs,
+                smooth_values,
+                label=f"{client_name}",
+                marker='s',
+                markersize=3
+            )
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.title(f"{strategy} Global Test Accuracy Comparison")
     plt.legend()
     plt.grid(True)
 
