@@ -13,6 +13,7 @@ else
     rm -rf ./plots/femnist
     rm -rf ./plots/cifar10
     rm -rf ./plots/cifar100
+    rm -rf ./plots/tinyimagenet
     
     # 删除所有日志目录
     rm -rf ./logs/mnist
