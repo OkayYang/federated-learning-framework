@@ -165,7 +165,7 @@ class FLServer:
             avg_train_loss = sum(train_loss_list) / len(train_loss_list) if train_loss_list else 0
             
             # 使用参与方模型在全局数据集上评估
-            print("\nEvaluating global model on global dataset...")
+            print("\nEvaluating selected clients on global dataset...")
             client_global_accuracies = []
             client_global_test_losses = []
             for client_name, worker in tqdm(
