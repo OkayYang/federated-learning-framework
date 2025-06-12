@@ -193,6 +193,14 @@ class TinyImageNetDataset(BaseDataset):
         # Tiny ImageNet数据已经是正确的格式 (N x 3 x 64 x 64)，无需额外处理
 
 
+class SVHNDataset(BaseDataset):
+    """SVHN数据集类"""
+    def __init__(self, X, Y):
+        super(SVHNDataset, self).__init__(X, Y)
+        
+        # SVHN数据已经是正确的格式 (N x 3 x 32 x 32)，无需额外处理
+
+
 def partition_data_by_dirichlet(train_data, train_labels, test_data, test_labels, client_num, num_classes, beta=0.4, seed=42):
     """
     使用狄利克雷分布创建非IID数据分区。
@@ -1018,4 +1026,83 @@ def load_tinyimagenet_dataset(client_list, transform=None, partition="noiid", be
         train_data, train_labels, test_data, test_labels, 
         client_list, partition, TinyImageNetDataset, 
         num_classes=200, beta=beta, seed=seed
+    )
+
+
+def load_svhn_dataset(client_list, transform=None, partition="noiid", beta=0.4, seed=42, data_fraction=1.0):
+    """
+    加载 SVHN (Street View House Numbers) 数据集，并根据指定的划分方式分发给客户端。
+    
+    SVHN 包含10个类别的彩色数字图像，图像尺寸为32x32x3。
+    
+    Args:
+        client_list: 客户端列表
+        transform: 数据预处理转换
+        partition: 划分方式，"iid"、"noiid"或"dirichlet"
+        beta: 狄利克雷分布的参数，控制非IID程度（仅当partition="dirichlet"时使用）
+        seed: 随机种子
+        data_fraction: 使用的数据比例，范围(0,1]，1表示全量数据
+        
+    Returns:
+        按客户端划分的训练集和测试集字典
+    """
+    # 初始化数据集加载
+    data_dir = init_dataset_loading("./data/SVHN/", transform, seed)
+
+    # 预处理：转换为张量 - 仅用于参考，我们将使用原始数据
+    if transform is None:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+
+    # 下载 SVHN 数据集
+    from torchvision.datasets import SVHN
+    train_dataset = SVHN(
+        root="./data", split='train', download=True, transform=None
+    )
+    test_dataset = SVHN(
+        root="./data", split='test', download=True, transform=None
+    )
+
+    # 获取数据
+    train_data = train_dataset.data  # 已经是numpy数组格式 (N, 3, 32, 32)
+    train_labels = train_dataset.labels
+    test_data = test_dataset.data  # 已经是numpy数组格式 (N, 3, 32, 32)
+    test_labels = test_dataset.labels
+    
+    # 控制数据量
+    if data_fraction < 1.0:
+        # 设置随机种子确保可重复性
+        np.random.seed(seed)
+        
+        # 计算保留的样本数
+        train_samples = int(len(train_data) * data_fraction)
+        test_samples = int(len(test_data) * data_fraction)
+        
+        # 随机选择样本
+        train_indices = np.random.choice(len(train_data), train_samples, replace=False)
+        test_indices = np.random.choice(len(test_data), test_samples, replace=False)
+        
+        # 筛选数据
+        train_data = train_data[train_indices]
+        train_labels = train_labels[train_indices]
+        test_data = test_data[test_indices]
+        test_labels = test_labels[test_indices]
+        
+        print(f"使用 {data_fraction:.2f} 比例的SVHN数据: {len(train_data)}个训练样本, {len(test_data)}个测试样本")
+    
+    # 确保数据类型是float32
+    train_data = train_data.astype(np.float32)
+    test_data = test_data.astype(np.float32)
+    
+    # 归一化
+    train_data = train_data / 127.5 - 1.0
+    test_data = test_data / 127.5 - 1.0
+    
+    # 使用统一的划分函数处理数据
+    return partition_dataset(
+        train_data, train_labels, test_data, test_labels, 
+        client_list, partition, SVHNDataset, 
+        num_classes=10, beta=beta, seed=seed
     )

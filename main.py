@@ -17,7 +17,7 @@ from fl.data import datasets
 # 导入必要的库和模块
 from fl.client.fl_base import ModelConfig
 from fl.server.fl_server import FLServer
-from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet, ResNet18_CIFAR10, ResNet18_CIFAR100, ResNet18_TinyImageNet, TinyImageNetNet
+from fl.model.model import CIFAR10Net, CIFAR100Net, FeMNISTNet, MNISTNet, ResNet18_CIFAR10, ResNet18_CIFAR100, ResNet18_TinyImageNet, TinyImageNetNet, SVHNNet
 from fl.model.fedgen_generator import FedGenGenerator
 from fl.model.fedftg_generator import create_fedftg_generator
 from fl.utils import (
@@ -75,6 +75,12 @@ def train_federated_model(args):
         model_fn = MNISTNet
         num_classes = 10
         feature_dim = 128
+    elif args.dataset.lower() == 'svhn':
+        client_list = ["client_" + str(i) for i in range(args.num_clients)]
+        dataset_dict = datasets.load_svhn_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
+        model_fn = SVHNNet
+        num_classes = 10
+        feature_dim = 256
     elif args.dataset.lower() == 'cifar10':
         client_list = ["client_" + str(i) for i in range(args.num_clients)]
         dataset_dict = datasets.load_cifar10_dataset(client_list, partition=args.partition, beta=args.dir_beta, seed=args.seed, data_fraction=args.data_fraction)
@@ -239,9 +245,9 @@ def parse_arguments():
                         help='联邦学习策略')
     
     # 数据集相关参数
-    parser.add_argument('--dataset', type=str, default='femnist', 
-                        choices=['femnist', 'mnist', 'cifar10', 'cifar100', 'tinyimagenet'],
-                        help='要使用的数据集 (femnist, mnist, cifar10, cifar100, tinyimagenet)')
+    parser.add_argument('--dataset', type=str, default='svhn', 
+                        choices=['femnist', 'mnist', 'svhn', 'cifar10', 'cifar100', 'tinyimagenet'],
+                        help='要使用的数据集 (femnist, mnist, svhn, cifar10, cifar100, tinyimagenet)')
     parser.add_argument('--partition', type=str, default='dirichlet', choices=['iid', 'noiid', 'dirichlet'],
                         help='数据分区方式 (iid 或 noiid 或 dirichlet)')
     parser.add_argument('--num_clients', type=int, default=10,

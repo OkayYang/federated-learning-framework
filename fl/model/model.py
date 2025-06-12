@@ -177,6 +177,108 @@ class CIFAR10Net(nn.Module):
         """将隐藏表示分类到各个类别"""
         return self.classifier(hidden)
 
+class SVHNNet(nn.Module):
+    """
+    SVHN网络模型，专为Street View House Numbers数据集设计
+    类似CIFAR10Net，但针对SVHN数据集特点进行了优化
+    """
+    def __init__(self):
+        super(SVHNNet, self).__init__()
+        # 头部特征提取层 - 处理SVHN的32x32彩色图像
+        self.backbone = nn.Sequential(
+            # 第一个卷积块
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            
+            # 第二个卷积块
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            
+            # 第三个卷积块
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+        
+        # 计算特征维度
+        self.feature_dim = 128 * 4 * 4  # 3次下采样后，32x32 -> 4x4
+        
+        # 映射层 - 将卷积特征映射到较低维的隐藏空间
+        self.mapping = nn.Sequential(
+            nn.Linear(self.feature_dim, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5)
+        )
+        
+        # 输出层 - 将隐藏空间映射到类别空间
+        self.classifier = nn.Linear(256, 10)  # SVHN有10个类别（数字0-9）
+    
+    def forward(self, x, start_layer="raw", return_all=False):
+        """
+        前向传播函数
+        
+        Args:
+            x: 输入数据
+            start_layer: 是否从映射层开始（用于fedgen等）
+            return_all: 是否返回特征（用于对比学习等）
+            
+        Returns:
+            模型输出
+        """
+        if start_layer == "hidden":
+            # 从映射层开始，适用于生成的特征输入
+            hidden = self.mapping(x)
+            # 通过输出层获得类别预测
+            logits = self.classifier(hidden)
+            return logits
+        elif start_layer == "classify":
+            logits = self.classifier(x)
+            return logits
+        else:
+            # 从头部开始，提取特征
+            x = self.backbone(x)
+            features = x.view(x.size(0), -1)
+        
+            # 通过映射层
+            hidden = self.mapping(features)
+            
+            # 通过输出层获得类别预测
+            logits = self.classifier(hidden)
+            
+            if return_all:
+                # 返回中间特征表示（用于对比学习、特征可视化等）
+                return features, hidden, logits
+            
+            return logits
+        
+    def get_features(self, x):
+        """提取输入的特征表示"""
+        x = self.backbone(x)
+        return x.view(x.size(0), -1)
+    
+    def get_hidden(self, features):
+        """将特征映射到隐藏空间"""
+        return self.mapping(features)
+    
+    def classify(self, hidden):
+        """将隐藏表示分类到各个类别"""
+        return self.classifier(hidden)
+
 class CIFAR100Net(nn.Module):
     """
     CIFAR100网络模型，模块化设计为三个部分：
@@ -280,6 +382,7 @@ class CIFAR100Net(nn.Module):
     def classify(self, hidden):
         """将隐藏表示分类到各个类别"""
         return self.classifier(hidden)
+
 class TinyImageNetNet(nn.Module):
     """
     TinyImageNet网络模型，模块化设计为三个部分：
