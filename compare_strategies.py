@@ -91,7 +91,42 @@ def smooth_data(data, window_length=5, polyorder=2):
         # 如果出错，返回原始数据
         return data
 
-# -------------- 绘制Global Test Accuracy图 --------------
+# -------------- 绘制Global Test Accuracy图 (原始数据) --------------
+plt.figure(figsize=(12, 8))
+
+for i, (strategy, history) in enumerate(strategies_data.items()):
+    epochs = range(1, len(history["global"]["test_accuracy"]) + 1)
+    
+    # 使用原始数据
+    accuracy = history["global"]["test_accuracy"]
+    
+    plt.plot(
+        epochs, 
+        accuracy, 
+        color=colors[i % len(colors)],
+        marker=markers[i % len(markers)],
+        markersize=8,
+        markevery=max(1, len(epochs)//8),
+        linewidth=2.5,
+        label=strategy
+    )
+
+plt.xlabel("Communication Rounds", fontsize=16)
+plt.ylabel("Test Accuracy", fontsize=16)
+plt.title(f"Global Test Accuracy (Raw Data) - {dataset.upper()} Dataset", fontsize=18)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(loc='best', frameon=True)
+
+# 自适应调整y轴范围
+global_min = min([min(history["global"]["test_accuracy"]) for history in strategies_data.values()])
+global_max = max([max(history["global"]["test_accuracy"]) for history in strategies_data.values()])
+plt.ylim(global_min - 0.02, global_max + 0.02)  # 添加少许边距
+
+plt.tight_layout()
+plt.savefig(f"{compare_dir}/global_test_accuracy_raw.png", dpi=300, bbox_inches="tight")
+plt.close()
+
+# -------------- 绘制Global Test Accuracy图 (平滑数据) --------------
 plt.figure(figsize=(12, 8))
 
 for i, (strategy, history) in enumerate(strategies_data.items()):
@@ -108,12 +143,12 @@ for i, (strategy, history) in enumerate(strategies_data.items()):
         markersize=8,
         markevery=max(1, len(epochs)//8),
         linewidth=2.5,
-        label=strategy
+        label=f"{strategy}"
     )
 
 plt.xlabel("Communication Rounds", fontsize=16)
 plt.ylabel("Test Accuracy", fontsize=16)
-plt.title(f"Global Test Accuracy - {dataset.upper()} Dataset", fontsize=18)
+plt.title(f"Global Test Accuracy (Smoothed) - {dataset.upper()} Dataset", fontsize=18)
 plt.grid(True, linestyle='--', alpha=0.7)
 plt.legend(loc='best', frameon=True)
 
@@ -123,10 +158,45 @@ global_max = max([max(history["global"]["test_accuracy"]) for history in strateg
 plt.ylim(global_min - 0.02, global_max + 0.02)  # 添加少许边距
 
 plt.tight_layout()
-plt.savefig(f"{compare_dir}/global_test_accuracy.png", dpi=300, bbox_inches="tight")
+plt.savefig(f"{compare_dir}/global_test_accuracy_smoothed.png", dpi=300, bbox_inches="tight")
 plt.close()
 
-# -------------- 绘制Local Test Accuracy图 --------------
+# -------------- 绘制Local Test Accuracy图 (原始数据) --------------
+plt.figure(figsize=(12, 8))
+
+for i, (strategy, history) in enumerate(strategies_data.items()):
+    epochs = range(1, len(history["local"]["test_accuracy"]) + 1)
+    
+    # 使用原始数据
+    accuracy = history["local"]["test_accuracy"]
+    
+    plt.plot(
+        epochs, 
+        accuracy, 
+        color=colors[i % len(colors)],
+        marker=markers[i % len(markers)],
+        markersize=8,
+        markevery=max(1, len(epochs)//8),
+        linewidth=2.5,
+        label=strategy
+    )
+
+plt.xlabel("Communication Rounds", fontsize=16)
+plt.ylabel("Test Accuracy", fontsize=16)
+plt.title(f"Local Test Accuracy (Raw Data) - {dataset.upper()} Dataset", fontsize=18)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(loc='best', frameon=True)
+
+# 自适应调整y轴范围
+local_min = min([min(history["local"]["test_accuracy"]) for history in strategies_data.values()])
+local_max = max([max(history["local"]["test_accuracy"]) for history in strategies_data.values()])
+plt.ylim(local_min - 0.02, local_max + 0.02)  # 添加少许边距
+
+plt.tight_layout()
+plt.savefig(f"{compare_dir}/local_test_accuracy_raw.png", dpi=300, bbox_inches="tight")
+plt.close()
+
+# -------------- 绘制Local Test Accuracy图 (平滑数据) --------------
 plt.figure(figsize=(12, 8))
 
 for i, (strategy, history) in enumerate(strategies_data.items()):
@@ -143,12 +213,12 @@ for i, (strategy, history) in enumerate(strategies_data.items()):
         markersize=8,
         markevery=max(1, len(epochs)//8),
         linewidth=2.5,
-        label=strategy
+        label=f"{strategy} (smoothed)"
     )
 
 plt.xlabel("Communication Rounds", fontsize=16)
 plt.ylabel("Test Accuracy", fontsize=16)
-plt.title(f"Local Test Accuracy - {dataset.upper()} Dataset", fontsize=18)
+plt.title(f"Local Test Accuracy (Smoothed) - {dataset.upper()} Dataset", fontsize=18)
 plt.grid(True, linestyle='--', alpha=0.7)
 plt.legend(loc='best', frameon=True)
 
@@ -158,6 +228,6 @@ local_max = max([max(history["local"]["test_accuracy"]) for history in strategie
 plt.ylim(local_min - 0.02, local_max + 0.02)  # 添加少许边距
 
 plt.tight_layout()
-plt.savefig(f"{compare_dir}/local_test_accuracy.png", dpi=300, bbox_inches="tight")
+plt.savefig(f"{compare_dir}/local_test_accuracy_smoothed.png", dpi=300, bbox_inches="tight")
 
 print(f"准确率对比图已保存到 {compare_dir} 目录")
