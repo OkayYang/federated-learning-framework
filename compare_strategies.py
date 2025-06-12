@@ -230,4 +230,73 @@ plt.ylim(local_min - 0.02, local_max + 0.02)  # 添加少许边距
 plt.tight_layout()
 plt.savefig(f"{compare_dir}/local_test_accuracy_smoothed.png", dpi=300, bbox_inches="tight")
 
+# -------------- 生成实验结果文本报告 --------------
+results_file = f"{compare_dir}/experiment_results.txt"
+
+with open(results_file, "w") as f:
+    f.write(f"实验结果报告 - {dataset.upper()} 数据集\n")
+    f.write("=" * 50 + "\n\n")
+    
+    # 表头
+    f.write(f"{'策略名称':<15} | {'最终全局准确率':^15} | {'最高全局准确率':^15} | {'最高全局准确率轮次':^15} | "
+            f"{'最终本地准确率':^15} | {'最高本地准确率':^15} | {'最高本地准确率轮次':^15} | "
+            f"{'平均全局准确率':^15} | {'平均本地准确率':^15}\n")
+    f.write("-" * 150 + "\n")
+    
+    # 各策略的结果
+    for strategy, history in strategies_data.items():
+        global_acc = history["global"]["test_accuracy"]
+        local_acc = history["local"]["test_accuracy"]
+        
+        # 计算各项指标
+        final_global_acc = global_acc[-1]
+        max_global_acc = max(global_acc)
+        max_global_acc_round = global_acc.index(max_global_acc) + 1
+        
+        final_local_acc = local_acc[-1]
+        max_local_acc = max(local_acc)
+        max_local_acc_round = local_acc.index(max_local_acc) + 1
+        
+        avg_global_acc = sum(global_acc) / len(global_acc)
+        avg_local_acc = sum(local_acc) / len(local_acc)
+        
+        # 写入结果
+        f.write(f"{strategy:<15} | {final_global_acc:^15.4f} | {max_global_acc:^15.4f} | {max_global_acc_round:^15d} | "
+                f"{final_local_acc:^15.4f} | {max_local_acc:^15.4f} | {max_local_acc_round:^15d} | "
+                f"{avg_global_acc:^15.4f} | {avg_local_acc:^15.4f}\n")
+    
+    # 添加一些总结信息
+    f.write("\n\n总结\n")
+    f.write("-" * 50 + "\n")
+    
+    # 找出全局准确率最高的策略
+    best_global_strategy = max(strategies_data.items(), 
+                              key=lambda x: max(x[1]["global"]["test_accuracy"]))
+    best_global_acc = max(best_global_strategy[1]["global"]["test_accuracy"])
+    
+    # 找出本地准确率最高的策略
+    best_local_strategy = max(strategies_data.items(), 
+                             key=lambda x: max(x[1]["local"]["test_accuracy"]))
+    best_local_acc = max(best_local_strategy[1]["local"]["test_accuracy"])
+    
+    f.write(f"全局测试准确率最高的策略: {best_global_strategy[0]} (准确率: {best_global_acc:.4f})\n")
+    f.write(f"本地测试准确率最高的策略: {best_local_strategy[0]} (准确率: {best_local_acc:.4f})\n")
+    
+    # 计算收敛速度 (使用AUC和达到最终准确率一半的轮次)
+    f.write("\n收敛速度分析\n")
+    f.write("-" * 50 + "\n")
+    
+    # 计算准确率曲线下面积(AUC)作为收敛速度指标 - 值越大说明收敛越快
+    f.write("1. 准确率曲线下面积 (AUC) - 值越大说明整体性能越好\n")
+    for strategy, history in strategies_data.items():
+        global_acc = history["global"]["test_accuracy"]
+        # 计算曲线下面积
+        auc = sum(global_acc) / len(global_acc)
+        # 计算AUC相对于最大可能值的比例
+        max_possible_auc = max(global_acc)  # 如果从第一轮就达到最大准确率
+        auc_ratio = auc / max_possible_auc
+        
+        f.write(f"{strategy:<15}: AUC = {auc:.4f}, AUC比率 = {auc_ratio:.4f}\n")
+    
 print(f"准确率对比图已保存到 {compare_dir} 目录")
+print(f"实验结果报告已保存到 {results_file}")
