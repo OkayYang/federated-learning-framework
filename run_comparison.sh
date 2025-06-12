@@ -19,7 +19,7 @@ if [ $# -lt 1 ]; then
     echo "错误: 未指定数据集名称"
     echo "使用方法: ./run_comparison.sh [数据集名称] [算法列表]"
     echo "支持的数据集: mnist, femnist, cifar10, cifar100"
-    echo "支持的算法: fedavg, fedprox, moon, scaffold, feddistill, fedgen, fedspd, fedalone"
+    echo "支持的算法: fedavg, fedprox, moon, scaffold, feddistill, fedgen, fedspd, fedalone, fedftg"
     echo "示例: ./run_comparison.sh mnist \"fedavg,fedprox,moon\""
     echo "示例: ./run_comparison.sh mnist all  # 运行所有算法"
     exit 1
@@ -31,19 +31,19 @@ DATASET="$1"
 # 获取要运行的算法列表
 if [ $# -eq 2 ]; then
     if [ "$2" = "all" ]; then
-        ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone"
+        ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone,fedftg"
     else
         ALGORITHMS="$2"
     fi
 else
     # 默认运行所有算法
-    ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone"
+    ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone,fedftg"
 fi
 
 # 验证数据集名称
 if [[ "$DATASET" != "mnist" && "$DATASET" != "femnist" && "$DATASET" != "cifar10" && "$DATASET" != "cifar100" && "$DATASET" != "tinyimagenet" && "$DATASET" != "svhn" && "$DATASET" != "emnist" ]]; then
     echo "错误: 不支持的数据集 '$DATASET'"
-    echo "支持的数据集: mnist, femnist, cifar10, cifar100, tinyimagenet, svhn, emnist"
+    echo "支持的数据集: mnist, femnist, cifar10, cifar100, tinyimagenet, svhn"
     exit 1
 fi
 
