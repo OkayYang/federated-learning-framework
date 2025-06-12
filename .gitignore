@@ -13,6 +13,8 @@ env/
 ENV/
 .venv/
 .PYENV/
+plots/
+logs/
 
 # Distribution / packaging
 *.egg-info/
@@ -45,6 +47,13 @@ pip-delete-this-directory*
 *.swn
 *.sublime-project
 *.sublime-workspace
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.lzma
+*.tar.lz
+*.tar.zst
 
 # Python-specific configurations
 # pyenv virtualenvs
