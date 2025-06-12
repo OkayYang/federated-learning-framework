@@ -41,9 +41,9 @@ else
 fi
 
 # 验证数据集名称
-if [[ "$DATASET" != "mnist" && "$DATASET" != "femnist" && "$DATASET" != "cifar10" && "$DATASET" != "cifar100" && "$DATASET" != "tinyimagenet" ]]; then
+if [[ "$DATASET" != "mnist" && "$DATASET" != "femnist" && "$DATASET" != "cifar10" && "$DATASET" != "cifar100" && "$DATASET" != "tinyimagenet" && "$DATASET" != "svhn" && "$DATASET" != "emnist" ]]; then
     echo "错误: 不支持的数据集 '$DATASET'"
-    echo "支持的数据集: mnist, femnist, cifar10, cifar100, tinyimagenet"
+    echo "支持的数据集: mnist, femnist, cifar10, cifar100, tinyimagenet, svhn, emnist"
     exit 1
 fi
 
