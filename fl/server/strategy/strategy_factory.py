@@ -15,6 +15,7 @@ from fl.server.strategy.fedgen_strategy import FedGenStrategy
 from fl.server.strategy.fedspd_strategy import FedSPDStrategy
 from fl.server.strategy.scaffold_strategy import ScaffoldStrategy
 from fl.server.strategy.feddistill_strategy import FedDistillStrategy
+from fl.server.strategy.fedgkd_strategy import FedGKDStrategy
 
 class StrategyFactory:
     """聚合策略工厂"""
@@ -48,6 +49,8 @@ class StrategyFactory:
             strategy = FedSPDStrategy()
         elif strategy_name == "fedftg":
             strategy = FedFTGStrategy()
+        elif strategy_name == "fedgkd":
+            strategy = FedGKDStrategy()
         else:
             raise ValueError(f"不支持的策略名称: {strategy_name}")
             

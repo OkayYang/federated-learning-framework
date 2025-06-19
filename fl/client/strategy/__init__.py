@@ -14,6 +14,7 @@ from fl.client.strategy.fed_ftg import FedFTG
 from fl.client.strategy.moon import Moon
 from fl.client.strategy.scaffold import Scaffold
 from fl.client.strategy.fed_gen import FedGen
+from fl.client.strategy.fed_gkd import FedGKD
 
 # 策略映射字典
 _strategy_map = {
@@ -25,7 +26,8 @@ _strategy_map = {
     "moon": Moon,
     "scaffold": Scaffold,
     "fedgen": FedGen,
-    "fedftg": FedFTG
+    "fedftg": FedFTG,
+    "fedgkd": FedGKD
 }
 
 def create_client(

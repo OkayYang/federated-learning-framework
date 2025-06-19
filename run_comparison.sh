@@ -19,7 +19,7 @@ if [ $# -lt 1 ]; then
     echo "错误: 未指定数据集名称"
     echo "使用方法: ./run_comparison.sh [数据集名称] [算法列表]"
     echo "支持的数据集: mnist, femnist, cifar10, cifar100"
-    echo "支持的算法: fedavg, fedprox, moon, scaffold, feddistill, fedgen, fedspd, fedalone, fedftg"
+    echo "支持的算法: fedavg, fedprox, moon, scaffold, feddistill, fedgen, fedspd, fedalone, fedftg, fedgkd"
     echo "示例: ./run_comparison.sh mnist \"fedavg,fedprox,moon\""
     echo "示例: ./run_comparison.sh mnist all  # 运行所有算法"
     exit 1
@@ -31,13 +31,13 @@ DATASET="$1"
 # 获取要运行的算法列表
 if [ $# -eq 2 ]; then
     if [ "$2" = "all" ]; then
-        ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone,fedftg"
+        ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone,fedftg,fedgkd"
     else
         ALGORITHMS="$2"
     fi
 else
     # 默认运行所有算法
-    ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone,fedftg"
+    ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone,fedftg,fedgkd"
 fi
 
 # 验证数据集名称

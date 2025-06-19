@@ -4,6 +4,7 @@ from fl.server.strategy.fedgen_strategy import FedGenStrategy
 from fl.server.strategy.fedspd_strategy import FedSPDStrategy
 from fl.server.strategy.scaffold_strategy import ScaffoldStrategy
 from fl.server.strategy.feddistill_strategy import FedDistillStrategy
+from fl.server.strategy.fedgkd_strategy import FedGKDStrategy
 
 __all__ = [
     'AggregationStrategy',
@@ -16,4 +17,5 @@ __all__ = [
     'FedGenStrategy',
     'FedSPDStrategy',
     'FedFTGStrategy',
+    'FedGKDStrategy',
 ]
