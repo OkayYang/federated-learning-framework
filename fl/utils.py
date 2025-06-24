@@ -8,6 +8,35 @@ import os
 import pickle
 import glob
 import seaborn as sns
+import torch
+
+
+def update_model_weights(model, weights):
+    """
+    更新模型权重，支持numpy数组和PyTorch张量
+    
+    Args:
+        model: PyTorch模型
+        weights: 权重（可以是numpy数组或PyTorch张量）
+    """
+    if isinstance(weights, list):
+        # 如果是列表，则假设是numpy数组列表
+        state_dict = model.state_dict()
+        for k, v in zip(state_dict.keys(), weights):
+            if isinstance(v, np.ndarray):
+                state_dict[k] = torch.from_numpy(v).to(state_dict[k].device)
+            elif isinstance(v, (float, np.float32, np.float64)):
+                # 处理标量值
+                state_dict[k] = torch.tensor(v, dtype=state_dict[k].dtype, device=state_dict[k].device)
+            else:
+                # 处理已经是tensor的情况
+                state_dict[k] = v.to(state_dict[k].device)
+        model.load_state_dict(state_dict)
+    elif isinstance(weights, dict):
+        # 如果是字典，则直接加载
+        model.load_state_dict(weights)
+    else:
+        raise TypeError("权重必须是列表或字典")
 
 
 def optim_wrapper(func, *args, **kwargs):

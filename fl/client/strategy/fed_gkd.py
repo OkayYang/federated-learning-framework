@@ -8,8 +8,10 @@ import torch.nn.functional as F
 import torch.nn as nn
 from tqdm import tqdm
 import numpy as np
+import copy
 
 from fl.client.fl_base import BaseClient
+from fl.utils import update_model_weights
 
 class FedGKD(BaseClient):
     """
@@ -40,10 +42,10 @@ class FedGKD(BaseClient):
         Returns:
             kd_loss: 知识蒸馏损失
         """
-        # 使用温度缩放的KL散度
-        with torch.no_grad():
-            teacher_probs = F.softmax(teacher_logits / self.temperature, dim=1)
+        # 教师logits已经在调用方法中detach，这里直接使用
+        teacher_probs = F.softmax(teacher_logits / self.temperature, dim=1)
         
+        # 计算学生模型的log softmax
         student_log_probs = F.log_softmax(student_logits / self.temperature, dim=1)
         
         # 计算KL散度
@@ -62,19 +64,16 @@ class FedGKD(BaseClient):
         Returns:
             ensemble_logits: 集成模型的logits
         """
-        # 保存当前模型权重
-        current_weights = self.get_weights(return_numpy=True)
+        # 创建一个新的模型实例，避免修改当前模型
+        ensemble_model = copy.deepcopy(self.model)
+        ensemble_model.eval()
         
-        # 加载集成模型权重
-        self.update_weights(ensemble_weights)
+        # 将权重加载到新模型中
+        update_model_weights(ensemble_model, ensemble_weights)
         
         # 计算集成模型的logits
-        self.model.eval()
         with torch.no_grad():
-            ensemble_logits = self.model(data)
-        
-        # 恢复当前模型权重
-        self.update_weights(current_weights)
+            ensemble_logits = ensemble_model(data).detach()
         
         return ensemble_logits
     
@@ -89,23 +88,21 @@ class FedGKD(BaseClient):
         Returns:
             vote_logits: 投票后的logits
         """
-        # 保存当前模型权重
-        current_weights = self.get_weights(return_numpy=True)
+        # 创建一个新的模型实例，避免修改当前模型
+        vote_model = copy.deepcopy(self.model)
+        vote_model.eval()
         
         # 收集所有历史模型的logits
         all_logits = []
+        
         for model_weights in historical_models:
-            # 加载历史模型权重
-            self.update_weights(model_weights)
+            # 加载历史模型权重到新模型
+            update_model_weights(vote_model, model_weights)
             
             # 计算该模型的logits
-            self.model.eval()
             with torch.no_grad():
-                logits = self.model(data)
+                logits = vote_model(data).detach()
                 all_logits.append(logits)
-        
-        # 恢复当前模型权重
-        self.update_weights(current_weights)
         
         # 简单平均所有模型的logits (软投票)
         if all_logits:
@@ -128,6 +125,9 @@ class FedGKD(BaseClient):
         Returns:
             tuple: (更新后的模型权重, 样本数, 平均损失)
         """
+        # 启用异常检测，帮助定位问题
+        torch.autograd.set_detect_anomaly(True)
+        
         # 1. 加载服务器传来的全局模型权重
         if weights is not None:
             self.update_weights(weights)
@@ -139,6 +139,14 @@ class FedGKD(BaseClient):
         total_kd_loss = 0
         num_sample = len(self.train_loader.dataset)
         total_batches = len(self.train_loader) * self.epochs
+        
+        # 确定使用哪种教师模式
+        if self.vote_mode and historical_models and len(historical_models) > 0:
+            teacher_mode = "vote"
+        elif ensemble_weights is not None:
+            teacher_mode = "ensemble"
+        else:
+            teacher_mode = None
         
         with tqdm(
             total=total_batches,
@@ -163,12 +171,12 @@ class FedGKD(BaseClient):
                     kd_loss = torch.tensor(0.0, device=self.device)
                     
                     # 根据模式计算蒸馏损失
-                    if self.vote_mode and historical_models:
+                    if teacher_mode == "vote":
                         # FEDGKD-VOTE模式: 使用多个历史模型投票
                         teacher_logits = self._compute_vote_logits(data, historical_models)
                         if teacher_logits is not None:
                             kd_loss = self._compute_kd_loss(output, teacher_logits)
-                    elif ensemble_weights is not None:
+                    elif teacher_mode == "ensemble":
                         # 默认FEDGKD模式: 使用集成模型作为教师
                         teacher_logits = self._compute_ensemble_logits(data, ensemble_weights)
                         kd_loss = self._compute_kd_loss(output, teacher_logits)

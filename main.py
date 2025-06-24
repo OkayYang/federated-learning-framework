@@ -240,12 +240,12 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='联邦学习框架参数配置')
 
      # 联邦学习算法相关参数
-    parser.add_argument('--strategy', type=str, default='fedgen',
+    parser.add_argument('--strategy', type=str, default='fedgkd',
                         choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone', 'fedftg', 'fedgkd'],
                         help='联邦学习策略')
     
     # 数据集相关参数
-    parser.add_argument('--dataset', type=str, default='svhn', 
+    parser.add_argument('--dataset', type=str, default='femnist', 
                         choices=['femnist', 'mnist', 'svhn', 'cifar10', 'cifar100', 'tinyimagenet'],
                         help='要使用的数据集 (femnist, mnist, svhn, cifar10, cifar100, tinyimagenet)')
     parser.add_argument('--partition', type=str, default='dirichlet', choices=['iid', 'noiid', 'dirichlet'],
