@@ -215,8 +215,8 @@ class FLServer:
             # 输出当前轮次的结果
             print("\nRound Summary:")
             print(f"├─ Train Loss: {avg_train_loss:.4f}")
-            print(f"├─ Global Test Accuracy: {global_test_accuracy:.2%}")
-            print(f"├─ Global Test Loss: {global_test_loss:.4f}")
+            print(f"├─ Global Test Accuracy: {avg_client_global_accuracy:.2%}")
+            print(f"├─ Global Test Loss: {avg_client_global_test_loss:.4f}")
             print(f"├─ Avg Client Test Accuracy: {avg_client_accuracy:.2%}")
             print(f"└─ Avg Client Test Loss: {avg_client_test_loss:.4f}")
 
