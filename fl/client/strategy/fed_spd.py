@@ -18,7 +18,7 @@ class FedSPD(BaseClient):
         self.class_weights = self._compute_class_weights(self.class_counts)
         
         # 知识蒸馏核心参数
-        self.temperature = kwargs.get('temperature', 1.0)  # 温度参数
+        self.temperature = kwargs.get('temperature', 2.0)  # 温度参数
         self.gamma1 = kwargs.get('gamma1', 1.0)           # logit蒸馏权重系数
         self.gamma2 = kwargs.get('gamma2', 1.0)           # 表征蒸馏权重系数
         

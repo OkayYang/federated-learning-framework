@@ -1,0 +1,113 @@
+import torch
+import numpy as np
+import copy
+
+from fl.aggregation.aggregator import average_weight
+from fl.server.strategy.strategy_base import AggregationStrategy
+
+
+class FedSPDStrategy(AggregationStrategy):
+    """FedSPD聚合策略 - 简化版本"""
+    def __init__(self):
+        # 核心状态
+        self.global_reps = None  # 全局表征
+        self.global_logits = None  # 全局logits
+        self.eps = 1e-10  # 添加一个小的常数避免除零
+        
+        # 移除复杂的历史记录机制，使用更直接的知识迁移
+        self.momentum = 0.8  # 动量参数，控制新旧知识融合比例
+
+    def aggregate(self, server, selected_workers, round_num, global_weights):
+        """重写聚合方法，处理类别表征和logits - 简化版"""
+        if not selected_workers:  # 如果没有选中的工作节点
+            return global_weights, []  # 返回原始权重和空的损失列表
+            
+        client_weight_list = []
+        sample_num_list = []
+        train_loss_list = []
+        client_class_reps = []
+        client_class_logits = []
+        
+        # 1. 收集客户端训练结果
+        for client_name, worker in selected_workers.items():
+            client_weight, sample_num, train_loss, class_reps, class_logits = worker.local_train(
+                sync_round=round_num,
+                weights=global_weights,
+                global_reps=self.global_reps,
+                global_logits=self.global_logits
+            )
+            
+            client_weight_list.append(client_weight)
+            sample_num_list.append(sample_num)
+            train_loss_list.append(train_loss)
+            client_class_reps.append(class_reps)
+            client_class_logits.append(class_logits)
+            server.history["workers"][client_name]["train_loss"].append(train_loss)
+        
+        # 2. 计算样本权重
+        sample_weights = np.array([max(float(w), self.eps) for w in sample_num_list], dtype=np.float32)
+        total_samples = np.sum(sample_weights)
+        if total_samples < self.eps:  # 如果总样本数接近零
+            sample_weights = np.ones_like(sample_weights, dtype=np.float32) / len(sample_weights)
+        else:
+            sample_weights = sample_weights / total_samples
+            
+        # 3. 聚合模型权重
+        global_weight = average_weight(client_weight_list, sample_weights.tolist())
+        
+        # 4. 聚合表征和logits - 简化版
+        all_class_reps = {}
+        all_class_logits = {}
+        
+        # 收集所有客户端的表征和logits
+        for client_idx, (client_rep, client_logit) in enumerate(zip(client_class_reps, client_class_logits)):
+            # 收集表征
+            for class_id, rep in client_rep.items():
+                if class_id not in all_class_reps:
+                    all_class_reps[class_id] = []
+                all_class_reps[class_id].append(np.array(rep, dtype=np.float32))
+            
+            # 收集logits
+            for class_id, logit in client_logit.items():
+                if class_id not in all_class_logits:
+                    all_class_logits[class_id] = []
+                all_class_logits[class_id].append(np.array(logit, dtype=np.float32))
+        
+        # 简单平均聚合 - 移除复杂权重计算
+        global_class_reps = {}
+        global_logits = {}
+        
+        # 聚合表征 - 简单平均
+        for class_id, reps in all_class_reps.items():
+            if reps:  # 确保有数据
+                global_class_reps[class_id] = np.mean(np.array(reps), axis=0).astype(np.float32)
+        
+        # 聚合logits - 简单平均
+        for class_id, logits in all_class_logits.items():
+            if logits:  # 确保有数据
+                global_logits[class_id] = np.mean(np.array(logits), axis=0).astype(np.float32)
+        
+        # 5. 使用动量更新全局表征和logits
+        if self.global_reps is None:
+            self.global_reps = global_class_reps
+        else:
+            # 动量更新
+            for class_id, rep in global_class_reps.items():
+                if class_id in self.global_reps:
+                    self.global_reps[class_id] = (self.momentum * self.global_reps[class_id] + 
+                                                 (1 - self.momentum) * rep).astype(np.float32)
+                else:
+                    self.global_reps[class_id] = rep
+        
+        if self.global_logits is None:
+            self.global_logits = global_logits
+        else:
+            # 动量更新
+            for class_id, logit in global_logits.items():
+                if class_id in self.global_logits:
+                    self.global_logits[class_id] = (self.momentum * self.global_logits[class_id] + 
+                                                  (1 - self.momentum) * logit).astype(np.float32)
+                else:
+                    self.global_logits[class_id] = logit
+        
+        return global_weight, train_loss_list
