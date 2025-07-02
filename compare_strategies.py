@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import sys
 import numpy as np
 from scipy.signal import savgol_filter
+from fl.utils import get_algorithm_color, get_all_algorithm_colors
 
 # 检查命令行参数，获取数据集名称
 if len(sys.argv) > 1:
@@ -63,8 +64,8 @@ plt.rcParams.update({
     'figure.dpi': 300
 })
 
-# 定义颜色和标记
-colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
+# 使用fl.utils中定义的算法颜色
+# colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
 markers = ['o', 's', '^', 'D', 'v', 'p', '*', 'X']
 
 # 平滑函数 - 使用Savitzky-Golay滤波器
@@ -103,7 +104,7 @@ for i, (strategy, history) in enumerate(strategies_data.items()):
     plt.plot(
         epochs, 
         accuracy, 
-        color=colors[i % len(colors)],
+        color=get_algorithm_color(strategy),
         marker=markers[i % len(markers)],
         markersize=8,
         markevery=max(1, len(epochs)//8),
@@ -138,7 +139,7 @@ for i, (strategy, history) in enumerate(strategies_data.items()):
     plt.plot(
         epochs, 
         accuracy, 
-        color=colors[i % len(colors)],
+        color=get_algorithm_color(strategy),
         marker=markers[i % len(markers)],
         markersize=8,
         markevery=max(1, len(epochs)//8),
@@ -173,7 +174,7 @@ for i, (strategy, history) in enumerate(strategies_data.items()):
     plt.plot(
         epochs, 
         accuracy, 
-        color=colors[i % len(colors)],
+        color=get_algorithm_color(strategy),
         marker=markers[i % len(markers)],
         markersize=8,
         markevery=max(1, len(epochs)//8),
@@ -208,7 +209,7 @@ for i, (strategy, history) in enumerate(strategies_data.items()):
     plt.plot(
         epochs, 
         accuracy, 
-        color=colors[i % len(colors)],
+        color=get_algorithm_color(strategy),
         marker=markers[i % len(markers)],
         markersize=8,
         markevery=max(1, len(epochs)//8),

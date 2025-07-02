@@ -11,6 +11,44 @@ import seaborn as sns
 import torch
 
 
+# 联邦学习算法颜色字典
+ALGORITHM_COLORS = {
+    'fedavg': '#1f77b4',     # 蓝色
+    'fedprox': '#ff7f0e',    # 橙色
+    'moon': '#2ca02c',       # 绿色
+    'scaffold': '#e377c2',   # 粉色
+    'feddistill': '#9467bd', # 紫色
+    'fedgen': '#8c564b',     # 棕色
+    'fedspd': '#d62728',     # 红色
+    'fedalone': '#7f7f7f',   # 灰色
+    'fedftg': '#17becf',     # 青色
+    'fedgkd': '#bcbd22'      # 橄榄绿
+}
+
+
+def get_algorithm_color(algorithm_name):
+    """
+    根据算法名称获取对应的颜色
+    
+    Args:
+        algorithm_name (str): 算法名称
+        
+    Returns:
+        str: 对应的颜色代码，如果算法不存在则返回黑色
+    """
+    return ALGORITHM_COLORS.get(algorithm_name.lower(), '#000000')  # 默认黑色
+
+
+def get_all_algorithm_colors():
+    """
+    获取所有算法的颜色字典
+    
+    Returns:
+        dict: 算法颜色字典的副本
+    """
+    return ALGORITHM_COLORS.copy()
+
+
 def update_model_weights(model, weights):
     """
     更新模型权重，支持numpy数组和PyTorch张量
@@ -87,9 +125,12 @@ def plot_global_metrics(history: dict, experiment_name: str):
 
     plt.figure(figsize=(15, 5))
 
+    # 获取策略对应的颜色
+    strategy_color = get_algorithm_color(strategy)
+
     # 绘制全局训练损失
     plt.subplot(1, 3, 1)
-    plt.plot(epochs, global_history["train_loss"], label="Train Loss", color="blue")
+    plt.plot(epochs, global_history["train_loss"], label="Train Loss", color=strategy_color)
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
     plt.title(f"{strategy} Global Train Loss")
@@ -98,7 +139,7 @@ def plot_global_metrics(history: dict, experiment_name: str):
     # 绘制全局测试准确率
     plt.subplot(1, 3, 2)
     plt.plot(
-        epochs, global_history["test_accuracy"], label="Test Accuracy", color="green"
+        epochs, global_history["test_accuracy"], label="Test Accuracy", color=strategy_color
     )
     plt.xlabel("Epochs")
     plt.ylabel("Accuracy (%)")
@@ -107,7 +148,7 @@ def plot_global_metrics(history: dict, experiment_name: str):
 
     # 绘制全局测试损失
     plt.subplot(1, 3, 3)
-    plt.plot(epochs, global_history["test_loss"], label="Test Loss", color="red")
+    plt.plot(epochs, global_history["test_loss"], label="Test Loss", color=strategy_color)
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
     plt.title(f"{strategy} Global Test Loss")
@@ -146,6 +187,9 @@ def plot_worker_metrics(history: dict, experiment_name: str):
     total_rounds = len(history["global"]["train_loss"])
     global_epochs = np.arange(1, total_rounds + 1)
 
+    # 获取策略对应的颜色
+    strategy_color = get_algorithm_color(strategy)
+
     # 绘制训练损失比较
     plt.subplot(5, 1, 1)
     for client_name, metrics in workers_history.items():
@@ -180,6 +224,7 @@ def plot_worker_metrics(history: dict, experiment_name: str):
                 global_epochs,
                 smooth_values,
                 label=f"{client_name}",
+                color=strategy_color,
                 marker='o',
                 markersize=3
             )
@@ -223,6 +268,7 @@ def plot_worker_metrics(history: dict, experiment_name: str):
                 global_epochs,
                 smooth_values,
                 label=f"{client_name}",
+                color=strategy_color,
                 marker='^',
                 markersize=3
             )
@@ -266,6 +312,7 @@ def plot_worker_metrics(history: dict, experiment_name: str):
                 global_epochs,
                 smooth_values,
                 label=f"{client_name}",
+                color=strategy_color,
                 marker='s',
                 markersize=3
             )
@@ -309,6 +356,7 @@ def plot_worker_metrics(history: dict, experiment_name: str):
                 global_epochs,
                 smooth_values,
                 label=f"{client_name}",
+                color=strategy_color,
                 marker='s',
                 markersize=3
             )
@@ -352,6 +400,7 @@ def plot_worker_metrics(history: dict, experiment_name: str):
                 global_epochs,
                 smooth_values,
                 label=f"{client_name}",
+                color=strategy_color,
                 marker='s',
                 markersize=3
             )
