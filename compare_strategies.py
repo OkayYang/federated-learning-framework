@@ -149,7 +149,7 @@ for i, (strategy, history) in enumerate(strategies_data.items()):
 
 plt.xlabel("Communication Rounds", fontsize=16)
 plt.ylabel("Test Accuracy", fontsize=16)
-plt.title(f"Global Test Accuracy (Smoothed) - {dataset.upper()} Dataset", fontsize=18)
+plt.title(f"Global Test Accuracy  - {dataset.upper()} Dataset", fontsize=18)
 plt.grid(True, linestyle='--', alpha=0.7)
 plt.legend(loc='best', frameon=True)
 
@@ -214,12 +214,12 @@ for i, (strategy, history) in enumerate(strategies_data.items()):
         markersize=8,
         markevery=max(1, len(epochs)//8),
         linewidth=2.5,
-        label=f"{strategy} (smoothed)"
+        label=f"{strategy} "
     )
 
 plt.xlabel("Communication Rounds", fontsize=16)
 plt.ylabel("Test Accuracy", fontsize=16)
-plt.title(f"Local Test Accuracy (Smoothed) - {dataset.upper()} Dataset", fontsize=18)
+plt.title(f"Local Test Accuracy - {dataset.upper()} Dataset", fontsize=18)
 plt.grid(True, linestyle='--', alpha=0.7)
 plt.legend(loc='best', frameon=True)
 
