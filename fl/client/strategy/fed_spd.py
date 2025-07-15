@@ -2,18 +2,26 @@
 # @Author  : xuxiaoyang
 # @Time    : 2025/5/16 11:07
 # @Describe:
+import copy
 import torch
 import numpy as np
 from tqdm import tqdm
 import torch.nn.functional as F
 import torch.nn as nn
+from fl.aggregation.aggregator import average_weight
 from fl.client.fl_base import BaseClient
+from fl.utils import update_model_weights
 
 class FedSPD(BaseClient):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
         # 知识蒸馏核心参数
+        self.teacher_model = copy.deepcopy(self.model)
+        self.teacher_buffer = []
+        self.buffer_size = kwargs.get('buffer_size', 10)
+        self.last_sync_round = -1  # 初始化轮次追踪
+
         self.temperature = kwargs.get('temperature', 1.0)  # 温度参数
         self.alpha = kwargs.get('alpha', 0.5)              # logits蒸馏权重
         self.beta = kwargs.get('beta', 0.3)                # 表征蒸馏权重
@@ -53,7 +61,7 @@ class FedSPD(BaseClient):
         else:
             return self.mse_loss(student_reps, teacher_reps)
 
-    def local_train(self, sync_round: int, weights=None, ensemble_weights=None):
+    def local_train(self, sync_round: int, weights=None):
         """
         FedSPD数据异构优化版本
         
@@ -79,18 +87,20 @@ class FedSPD(BaseClient):
         if weights is not None:
             self.update_weights(weights)
         
-        # 2. 创建教师模型（使用全局权重）
-        teacher_model = None
-        teacher_weights = ensemble_weights if ensemble_weights is not None else weights
-        
-        if teacher_weights is not None:
-            import copy
-            from fl.utils import update_model_weights
+        # 2. 创建教师模型（使用全局权重）- 确保每轮只添加一次
+        if weights is not None:
+            # 检查是否为新轮次或新权重，避免重复添加
+            if not hasattr(self, 'last_sync_round') or sync_round != self.last_sync_round:
+                self.teacher_buffer.append(weights)
+                if len(self.teacher_buffer) > self.buffer_size:
+                    self.teacher_buffer.pop(0)
+                self.last_sync_round = sync_round
             
-            # 创建教师模型（基于全局权重）
-            teacher_model = copy.deepcopy(self.model)
-            update_model_weights(teacher_model, teacher_weights)
-            teacher_model.eval()
+            # 构建教师模型（平均历史权重）
+            if len(self.teacher_buffer) > 0:
+                teacher_weights = average_weight(self.teacher_buffer)
+                update_model_weights(self.teacher_model, teacher_weights)
+                self.teacher_model.eval()
         
         # 3. 开始本地训练
         self.model.train()
@@ -124,40 +134,38 @@ class FedSPD(BaseClient):
                     # 1. 本地监督学习损失
                     ce_loss = self.loss(student_logits, target)
                     
-                    # 2. 🚀 教师模型指导（logits + 表征蒸馏）
+                    # 2. 教师模型指导（logits + 表征蒸馏）
                     kd_loss = torch.tensor(0.0, device=self.device)
                     rep_loss = torch.tensor(0.0, device=self.device)
                     
-                    if teacher_model is not None:
+                    # 只有在有教师模型且teacher_buffer不为空时才进行蒸馏
+                    if self.teacher_model is not None and len(self.teacher_buffer) > 0:
                         # 教师模型前向传播
                         with torch.no_grad():
-                            teacher_logits = teacher_model(data)
+                            teacher_logits = self.teacher_model(data)
                             teacher_reps = None
-                            
                             # 获取教师表征
+                            _, teacher_reps, teacher_logits = self.teacher_model(data, return_all=True)
                             
-                            _, teacher_reps, teacher_logits = teacher_model(data, return_all=True)
-                            
-                        
                         # Logits蒸馏
                         with torch.no_grad():
                             teacher_probs = F.softmax(teacher_logits / self.temperature, dim=1)
                         student_log_probs = F.log_softmax(student_logits / self.temperature, dim=1)
                         kd_loss = self.kl_loss(student_log_probs, teacher_probs) * (self.temperature ** 2)
                         
-                        # 🎯 异构数据优化的表征蒸馏
+                        # 表征蒸馏
                         if student_reps is not None and teacher_reps is not None:
                             rep_loss = self._compute_representation_loss(
                                 student_reps, teacher_reps, loss_type='hybrid'
                             )
                     
-                    # 3. 异构数据优化总损失：L = CE + α * KD + β * Rep
+                    # 3. 总损失：L = CE + α * KD + β * Rep
                     total_batch_loss = ce_loss + self.alpha * kd_loss + self.beta * rep_loss
                     
                     # 反向传播和优化
                     total_batch_loss.backward()
                     
-                    # 梯度裁剪 - 在异构数据中很重要
+                    # 梯度裁剪
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     
                     self.optimizer.step()
@@ -185,8 +193,6 @@ class FedSPD(BaseClient):
                     'ce': f"{avg_ce_loss:.4f}",
                     'kd': f"{avg_kd_loss:.4f}",
                     'rep': f"{avg_rep_loss:.4f}",
-                    'α': f"{self.alpha:.1f}",
-                    'β': f"{self.beta:.1f}",
                     'lr': f"{current_lr:.6f}"
                 })
         
