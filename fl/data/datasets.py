@@ -203,7 +203,7 @@ class SVHNDataset(BaseDataset):
 
 def partition_data_by_dirichlet(train_data, train_labels, test_data, test_labels, client_num, num_classes, beta=0.4, seed=42):
     """
-    使用狄利克雷分布创建非IID数据分区。
+    使用狄利克雷分布创建非IID训练数据分区，测试数据按IID方式划分。
     
     Args:
         train_data: 训练数据
@@ -239,7 +239,7 @@ def partition_data_by_dirichlet(train_data, train_labels, test_data, test_labels
     # 记录每个客户端获得的样本总数
     client_sample_count = np.zeros(client_num)
     
-    # 为每个类别分配数据
+    # 为每个类别分配训练数据
     for k in range(num_classes):
         # 得到该类别的所有样本索引
         idx_k = label_distribution[k]
@@ -319,50 +319,8 @@ def partition_data_by_dirichlet(train_data, train_labels, test_data, test_labels
                 client_sample_count[client_id] += samples_to_transfer
                 client_sample_count[max_client_id] -= samples_to_transfer
     
-    # 同样处理测试数据，使用相同的类别分布
-    test_label_distribution = {}
-    for k in range(num_classes):
-        test_label_distribution[k] = []
-    
-    for i, label in enumerate(test_labels):
-        test_label_distribution[label].append(i)
-    
-    client_test_data = [[] for _ in range(client_num)]
-    client_test_labels = [[] for _ in range(client_num)]
-    
-    # 为测试数据使用相同的分布，确保测试数据和训练数据匹配
-    for k in range(num_classes):
-        idx_k = test_label_distribution[k]
-        if len(idx_k) == 0:
-            continue
-            
-        proportions = class_priors[:, k]
-        proportions = proportions / proportions.sum()
-        
-        # 计算每个客户端应该获得的测试样本数量
-        num_samples_per_client = (proportions * len(idx_k)).astype(int)
-        # 处理因舍入导致的总数不匹配问题
-        remainder = len(idx_k) - num_samples_per_client.sum()
-        if remainder > 0:
-            # 将剩余样本分配给获得样本最少的客户端
-            idx_min = np.argmin(num_samples_per_client)
-            num_samples_per_client[idx_min] += remainder
-        
-        # 随机打乱该类别的测试样本
-        np.random.shuffle(idx_k)
-        
-        # 分配测试样本给客户端
-        idx_begin = 0
-        for client_id in range(client_num):
-            samples_to_take = num_samples_per_client[client_id]
-            if samples_to_take > 0:  # 确保样本数量为正
-                idx_end = idx_begin + samples_to_take
-                if idx_end > len(idx_k):  # 防止索引越界
-                    idx_end = len(idx_k)
-                
-                client_test_data[client_id].extend([test_data[idx] for idx in idx_k[idx_begin:idx_end]])
-                client_test_labels[client_id].extend([test_labels[idx] for idx in idx_k[idx_begin:idx_end]])
-                idx_begin = idx_end
+    # 测试数据按IID方式划分，确保公平评估
+    client_test_data, client_test_labels = partition_test_data_iid(test_data, test_labels, client_num, seed)
     
     # 打印样本分配统计信息
     print("\n客户端样本数量统计:")
@@ -395,6 +353,50 @@ def init_dataset_loading(data_dir, transform=None, seed=42):
     return data_dir
 
 
+def partition_test_data_iid(test_data, test_labels, client_num, seed=42):
+    """
+    按独立同分布(IID)方式划分测试数据
+    
+    Args:
+        test_data: 测试数据
+        test_labels: 测试标签
+        client_num: 客户端数量
+        seed: 随机种子
+        
+    Returns:
+        tuple: 客户端测试数据、标签的列表
+    """
+    # 设置随机种子
+    np.random.seed(seed + 1000)  # 使用不同的种子避免与训练数据冲突
+    random.seed(seed + 1000)
+    
+    # 确保数据是numpy数组
+    if not isinstance(test_data, np.ndarray):
+        test_data = np.array(test_data)
+    if not isinstance(test_labels, np.ndarray):
+        test_labels = np.array(test_labels)
+    
+    # 随机打乱测试数据
+    test_indices = np.random.permutation(len(test_data))
+    test_data = test_data[test_indices]
+    test_labels = test_labels[test_indices]
+    
+    # 初始化客户端数据
+    client_test_data = []
+    client_test_labels = []
+    
+    # 均匀划分测试数据给每个客户端
+    test_samples_per_client = len(test_data) // client_num
+    for i in range(client_num):
+        start_idx = i * test_samples_per_client
+        end_idx = start_idx + test_samples_per_client if i < client_num - 1 else len(test_data)
+        
+        client_test_data.append(test_data[start_idx:end_idx])
+        client_test_labels.append(test_labels[start_idx:end_idx])
+    
+    return client_test_data, client_test_labels
+
+
 def partition_data_iid(train_data, train_labels, test_data, test_labels, client_num, seed=42):
     """
     按独立同分布(IID)方式划分数据
@@ -414,21 +416,20 @@ def partition_data_iid(train_data, train_labels, test_data, test_labels, client_
     np.random.seed(seed)
     random.seed(seed)
     
+    # 确保数据是numpy数组
+    if not isinstance(train_data, np.ndarray):
+        train_data = np.array(train_data)
+    if not isinstance(train_labels, np.ndarray):
+        train_labels = np.array(train_labels)
+    
     # 随机打乱训练数据
     indices = np.random.permutation(len(train_data))
     train_data = train_data[indices]
     train_labels = train_labels[indices]
     
-    # 随机打乱测试数据
-    test_indices = np.random.permutation(len(test_data))
-    test_data = test_data[test_indices]
-    test_labels = test_labels[test_indices]
-    
     # 初始化客户端数据
-    client_train_data = [[] for _ in range(client_num)]
-    client_train_labels = [[] for _ in range(client_num)]
-    client_test_data = [[] for _ in range(client_num)]
-    client_test_labels = [[] for _ in range(client_num)]
+    client_train_data = []
+    client_train_labels = []
     
     # 均匀划分训练数据给每个客户端
     samples_per_client = len(train_data) // client_num
@@ -436,24 +437,18 @@ def partition_data_iid(train_data, train_labels, test_data, test_labels, client_
         start_idx = i * samples_per_client
         end_idx = start_idx + samples_per_client if i < client_num - 1 else len(train_data)
         
-        client_train_data[i] = train_data[start_idx:end_idx]
-        client_train_labels[i] = train_labels[start_idx:end_idx]
+        client_train_data.append(train_data[start_idx:end_idx])
+        client_train_labels.append(train_labels[start_idx:end_idx])
     
-    # 均匀划分测试数据给每个客户端
-    test_samples_per_client = len(test_data) // client_num
-    for i in range(client_num):
-        start_idx = i * test_samples_per_client
-        end_idx = start_idx + test_samples_per_client if i < client_num - 1 else len(test_data)
-        
-        client_test_data[i] = test_data[start_idx:end_idx]
-        client_test_labels[i] = test_labels[start_idx:end_idx]
+    # 测试数据按IID方式划分
+    client_test_data, client_test_labels = partition_test_data_iid(test_data, test_labels, client_num, seed)
     
     return client_train_data, client_train_labels, client_test_data, client_test_labels
 
 
 def partition_data_noiid(train_data, train_labels, test_data, test_labels, client_num, num_classes, seed=42):
     """
-    按非独立同分布(Non-IID)方式划分数据
+    按非独立同分布(Non-IID)方式划分训练数据，测试数据按IID方式划分
     
     Args:
         train_data: 训练数据
@@ -474,8 +469,6 @@ def partition_data_noiid(train_data, train_labels, test_data, test_labels, clien
     # 确保数据是numpy数组
     train_data = np.asarray(train_data)
     train_labels = np.asarray(train_labels)
-    test_data = np.asarray(test_data)
-    test_labels = np.asarray(test_labels)
     
     # 按类别整理数据索引，而不是实际数据
     label_to_indices = {i: [] for i in range(num_classes)}
@@ -484,44 +477,25 @@ def partition_data_noiid(train_data, train_labels, test_data, test_labels, clien
     
     # 初始化客户端数据
     client_train_indices = [[] for _ in range(client_num)]
-    client_train_data = [[] for _ in range(client_num)]
-    client_train_labels = [[] for _ in range(client_num)]
-    client_test_data = [[] for _ in range(client_num)]
-    client_test_labels = [[] for _ in range(client_num)]
+    client_train_data = []
+    client_train_labels = []
     
     # 为每个客户端分配不均衡的类别样本
     for client_id in range(client_num):
         for label, indices in label_to_indices.items():
-            num_samples_per_label = random.randint(1, len(indices) // 2)
-            selected_indices = random.sample(indices, num_samples_per_label)
-            client_train_indices[client_id].extend(selected_indices)
+            if len(indices) > 0:
+                num_samples_per_label = random.randint(1, max(1, len(indices) // 2))
+                selected_indices = random.sample(indices, min(num_samples_per_label, len(indices)))
+                client_train_indices[client_id].extend(selected_indices)
     
     # 根据索引提取实际数据
     for client_id in range(client_num):
         indices = client_train_indices[client_id]
-        client_train_data[client_id] = train_data[indices]
-        client_train_labels[client_id] = train_labels[indices]
+        client_train_data.append(train_data[indices])
+        client_train_labels.append(train_labels[indices])
     
-    # 分配测试数据
-    for label in range(num_classes):
-        # 找到该类别的所有测试样本索引
-        label_test_indices = np.where(test_labels == label)[0]
-        num_samples_for_test = len(label_test_indices) // client_num
-        
-        for client_id in range(client_num):
-            start_idx = client_id * num_samples_for_test
-            end_idx = start_idx + num_samples_for_test if client_id < client_num - 1 else len(label_test_indices)
-            
-            selected_indices = label_test_indices[start_idx:end_idx]
-            client_test_data[client_id].extend(test_data[selected_indices])
-            client_test_labels[client_id].extend(test_labels[selected_indices])
-    
-    # 最后进行一次数组转换，确保格式一致
-    for client_id in range(client_num):
-        client_train_data[client_id] = np.array(client_train_data[client_id])
-        client_train_labels[client_id] = np.array(client_train_labels[client_id])
-        client_test_data[client_id] = np.array(client_test_data[client_id])
-        client_test_labels[client_id] = np.array(client_test_labels[client_id])
+    # 测试数据按IID方式划分，确保公平评估
+    client_test_data, client_test_labels = partition_test_data_iid(test_data, test_labels, client_num, seed)
     
     return client_train_data, client_train_labels, client_test_data, client_test_labels
 

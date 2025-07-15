@@ -37,7 +37,7 @@ if [ $# -eq 2 ]; then
     fi
 else
     # 默认运行所有算法
-    ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,fedalone,fedftg,fedgkd"
+    ALGORITHMS="fedavg,fedprox,fedspd,moon,feddistill,fedgen,scaffold,fedalone,fedftg,fedgkd"
 fi
 
 # 验证数据集名称
@@ -53,15 +53,15 @@ echo "选择的算法: $ALGORITHMS"
 # 设置基本参数
 BATCH_SIZE=64    # 批处理大小
 LOCAL_EPOCHS=10  # 本地训练轮数
-COMM_ROUNDS=30  # 通信轮数
+COMM_ROUNDS=50  # 通信轮数
 RATIO_CLIENT=0.5  # 每轮参与训练的客户端比例
 LEARNING_RATE=0.01  # 学习率
 OPTIMIZER="adam"    # 优化器: adam, sgd
-SEED=42             # 随机种子，保证实验可重复性
+SEED=2026             # 随机种子，保证实验可重复性
 PARTITION="dirichlet"   # 数据分区方式: iid, noiid, dirichlet
 NUM_CLIENTS=20      # 客户端数量
-DIR_BETA=0.2       # Dirichlet分布参数，仅在PARTITION="dirichlet"时使用
-DATA_FRACTION=0.5    # 数据集采样比例
+DIR_BETA=0.6       # Dirichlet分布参数，仅在PARTITION="dirichlet"时使用
+DATA_FRACTION=1.0    # 数据集采样比例
 
 
 # 创建数据集特定的日志目录

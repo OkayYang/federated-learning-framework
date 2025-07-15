@@ -7,107 +7,79 @@ from fl.server.strategy.strategy_base import AggregationStrategy
 
 
 class FedSPDStrategy(AggregationStrategy):
-    """FedSPD聚合策略 - 简化版本"""
+    """FedSPD历史教师策略
+    
+    核心设计：
+    - 维护历史全局模型缓冲区
+    - 计算历史模型平均作为教师
+    - 下发历史平均教师给客户端进行蒸馏
+    
+    优势：
+    - 稳定的历史知识（避免单轮波动）
+    - 简化接口（无需类别级知识传递）
+    - 双重蒸馏（客户端做reps+logits蒸馏）
+    """
     def __init__(self):
-        # 核心状态
-        self.global_reps = None  # 全局表征
-        self.global_logits = None  # 全局logits
-        self.eps = 1e-10  # 添加一个小的常数避免除零
+        # 历史模型管理
+        self.model_buffer = []  # 历史全局模型缓冲区
+        self.buffer_size = 5    # 缓冲区大小
+        self.eps = 1e-10        # 避免除零
+
+    def _update_model_buffer(self, global_weights):
+        """更新历史模型缓冲区"""
+        import copy
+        # 保存当前全局模型的深拷贝到缓冲区
+        self.model_buffer.append(copy.deepcopy(global_weights))
         
-        # 移除复杂的历史记录机制，使用更直接的知识迁移
-        self.momentum = 0.2  # 动量参数，控制新旧知识融合比例
+        # 如果缓冲区大小超过限制，移除最旧的模型
+        if len(self.model_buffer) > self.buffer_size:
+            self.model_buffer.pop(0)
+    
+    def _build_ensemble_teacher(self):
+        """构建历史模型平均作为教师"""
+        if not self.model_buffer:
+            return None
+        
+        # 简单平均所有缓冲区中的模型权重
+        from fl.aggregation.aggregator import average_weight
+        return average_weight(self.model_buffer)
 
     def aggregate(self, server, selected_workers, round_num, global_weights):
-        """重写聚合方法，处理类别表征和logits - 简化版"""
-        if not selected_workers:  # 如果没有选中的工作节点
-            return global_weights, []  # 返回原始权重和空的损失列表
+        """FedSPD历史教师聚合方法"""
+        if not selected_workers:
+            return global_weights, []
+        
+        # 1. 更新历史模型缓冲区
+        self._update_model_buffer(global_weights)
+        
+        # 2. 构建历史平均教师
+        ensemble_teacher = self._build_ensemble_teacher()
             
         client_weight_list = []
         sample_num_list = []
         train_loss_list = []
-        client_class_reps = []
-        client_class_logits = []
         
-        # 1. 收集客户端训练结果
+        # 3. 收集客户端训练结果（传递历史平均教师）
         for client_name, worker in selected_workers.items():
-            client_weight, sample_num, train_loss, class_reps, class_logits = worker.local_train(
+            client_weight, sample_num, train_loss = worker.local_train(
                 sync_round=round_num,
                 weights=global_weights,
-                global_reps=self.global_reps,
-                global_logits=self.global_logits
+                ensemble_weights=ensemble_teacher  # 🚀 传递历史平均教师
             )
             
             client_weight_list.append(client_weight)
             sample_num_list.append(sample_num)
             train_loss_list.append(train_loss)
-            client_class_reps.append(class_reps)
-            client_class_logits.append(class_logits)
             server.history["workers"][client_name]["train_loss"].append(train_loss)
         
-        # 2. 计算样本权重
+        # 4. 聚合全局模型权重
         sample_weights = np.array([max(float(w), self.eps) for w in sample_num_list], dtype=np.float32)
         total_samples = np.sum(sample_weights)
-        if total_samples < self.eps:  # 如果总样本数接近零
+        if total_samples < self.eps:
             sample_weights = np.ones_like(sample_weights, dtype=np.float32) / len(sample_weights)
         else:
             sample_weights = sample_weights / total_samples
             
-        # 3. 聚合模型权重
         global_weight = average_weight(client_weight_list, sample_weights.tolist())
-        
-        # 4. 聚合表征和logits - 简化版
-        all_class_reps = {}
-        all_class_logits = {}
-        
-        # 收集所有客户端的表征和logits
-        for client_idx, (client_rep, client_logit) in enumerate(zip(client_class_reps, client_class_logits)):
-            # 收集表征
-            for class_id, rep in client_rep.items():
-                if class_id not in all_class_reps:
-                    all_class_reps[class_id] = []
-                all_class_reps[class_id].append(np.array(rep, dtype=np.float32))
-            
-            # 收集logits
-            for class_id, logit in client_logit.items():
-                if class_id not in all_class_logits:
-                    all_class_logits[class_id] = []
-                all_class_logits[class_id].append(np.array(logit, dtype=np.float32))
-        
-        # 简单平均聚合 - 移除复杂权重计算
-        global_class_reps = {}
-        global_logits = {}
-        
-        # 聚合表征 - 简单平均
-        for class_id, reps in all_class_reps.items():
-            if reps:  # 确保有数据
-                global_class_reps[class_id] = np.mean(np.array(reps), axis=0).astype(np.float32)
-        
-        # 聚合logits - 简单平均
-        for class_id, logits in all_class_logits.items():
-            if logits:  # 确保有数据
-                global_logits[class_id] = np.mean(np.array(logits), axis=0).astype(np.float32)
-        
-        # 5. 使用动量更新全局表征和logits
-        if self.global_reps is None:
-            self.global_reps = global_class_reps
-        else:
-            # 动量更新
-            for class_id, rep in global_class_reps.items():
-                if class_id in self.global_reps:
-                    self.global_reps[class_id] = (self.momentum * self.global_reps[class_id] + 
-                                                 (1 - self.momentum) * rep).astype(np.float32)
-                else:
-                    self.global_reps[class_id] = rep
-        
-        if self.global_logits is None:
-            self.global_logits = global_logits
-        else:
-            # 动量更新
-            for class_id, logit in global_logits.items():
-                if class_id in self.global_logits:
-                    self.global_logits[class_id] = (self.momentum * self.global_logits[class_id] + 
-                                                  (1 - self.momentum) * logit).astype(np.float32)
-                else:
-                    self.global_logits[class_id] = logit
         
         return global_weight, train_loss_list
