@@ -17,9 +17,10 @@ ALGORITHM_COLORS = {
     'fedprox': '#ff7f0e',    # 橙色
     'moon': '#2ca02c',       # 绿色
     'scaffold': '#e377c2',   # 粉色
-    'feddistill': '#9467bd', # 紫色
+    'feddistill': '#ff9896', # 紫色
     'fedgen': '#8c564b',     # 棕色
     'fedspd': '#d62728',     # 红色
+    'fedspd-lc': '#9467bd',  # 浅红色
     'fedalone': '#7f7f7f',   # 灰色
     'fedftg': '#17becf',     # 青色
     'fedgkd': '#bcbd22'      # 橄榄绿

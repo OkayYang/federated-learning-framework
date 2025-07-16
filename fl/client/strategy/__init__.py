@@ -11,6 +11,7 @@ from fl.client.strategy.fed_distill import FedDistill
 from fl.client.strategy.fed_prox import FedProx
 from fl.client.strategy.fed_spd import FedSPD
 from fl.client.strategy.fed_ftg import FedFTG
+from fl.client.strategy.fed_spdlc import FedSPDLC
 from fl.client.strategy.moon import Moon
 from fl.client.strategy.scaffold import Scaffold
 from fl.client.strategy.fed_gen import FedGen
@@ -27,7 +28,8 @@ _strategy_map = {
     "scaffold": Scaffold,
     "fedgen": FedGen,
     "fedftg": FedFTG,
-    "fedgkd": FedGKD
+    "fedgkd": FedGKD,
+    "fedspd-lc": FedSPDLC
 }
 
 def create_client(

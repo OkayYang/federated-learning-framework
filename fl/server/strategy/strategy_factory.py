@@ -16,6 +16,7 @@ from fl.server.strategy.fedspd_strategy import FedSPDStrategy
 from fl.server.strategy.scaffold_strategy import ScaffoldStrategy
 from fl.server.strategy.feddistill_strategy import FedDistillStrategy
 from fl.server.strategy.fedgkd_strategy import FedGKDStrategy
+from fl.server.strategy.fedspdlc_strategy import FedSPDLCStrategy
 
 class StrategyFactory:
     """聚合策略工厂"""
@@ -47,6 +48,8 @@ class StrategyFactory:
             strategy = FedGenStrategy()
         elif strategy_name == "fedspd":
             strategy = FedSPDStrategy()
+        elif strategy_name == "fedspd-lc":
+            strategy = FedSPDLCStrategy()
         elif strategy_name == "fedftg":
             strategy = FedFTGStrategy()
         elif strategy_name == "fedgkd":

@@ -241,7 +241,7 @@ def parse_arguments():
 
      # 联邦学习算法相关参数
     parser.add_argument('--strategy', type=str, default='fedspd',
-                        choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedalone', 'fedftg', 'fedgkd'],
+                        choices=['fedavg', 'fedprox', 'moon', 'scaffold', 'feddistill', 'fedgen', 'fedspd', 'fedspd-lc', 'fedalone', 'fedftg', 'fedgkd'],
                         help='联邦学习策略')
     
     # 数据集相关参数
