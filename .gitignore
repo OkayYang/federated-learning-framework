@@ -1,0 +1,103 @@
+
+/data/
+
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment directories
+venv/
+env/
+ENV/
+.venv/
+.PYENV/
+plots/
+logs/
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# PyInstaller
+#  Usually stores its build in the `dist` folder
+dist/
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory*
+
+# Python virtualenv
+# .env is commonly used to store virtualenv data
+.env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.sublime-project
+*.sublime-workspace
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.lzma
+*.tar.lz
+*.tar.zst
+
+# Python-specific configurations
+# pyenv virtualenvs
+.python-version
+
+# Other system files
+.DS_Store
+Thumbs.db
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+*.pth
+*.pkl
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.ico
+# Test and coverage reports
+*.coveragerc
+.coverage
+*.hypothesis/
+nosetests.xml
+coverage.xml
+*.tox/
+*.nox/
+*.coverage.*
+
+# pipenv
+Pipfile.lock
+
+# Poetry
+.poetry/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+
+# Cython
+cython_debug/
+
+# Pytest
+.cache/

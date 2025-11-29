@@ -1,0 +1,11 @@
+torch
+torchvision
+numpy
+requests
+tqdm
+matplotlib
+seaborn
+scipy
+scikit-learn
+ray
+rich
