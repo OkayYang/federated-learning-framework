@@ -1,5 +1,6 @@
-#!/bin/bash
-
+#!/bin/sh
+export RAY_BACKEND_LOG_LEVEL=error
+export RAY_worker_register_timeout_seconds=60  # 可选，减少某些超时日志
 # 联邦学习算法比较实验脚本
 # 这个脚本会运行指定的联邦学习算法，并生成对比结果
 # 使用方法: ./run_comparison.sh [数据集名称] [算法列表]
@@ -40,12 +41,17 @@ else
     ALGORITHMS="fedavg,fedprox,fedspd,fedspd-lc,moon,feddistill,fedgen,fedalone,fedftg,fedgkd"
 fi
 
-# 验证数据集名称
-if [[ "$DATASET" != "mnist" && "$DATASET" != "femnist" && "$DATASET" != "cifar10" && "$DATASET" != "cifar100" && "$DATASET" != "tinyimagenet" && "$DATASET" != "svhn" && "$DATASET" != "emnist" ]]; then
-    echo "错误: 不支持的数据集 '$DATASET'"
-    echo "支持的数据集: mnist, femnist, cifar10, cifar100, tinyimagenet, svhn"
-    exit 1
-fi
+# 验证数据集名称（使用 POSIX sh 语法）
+case "$DATASET" in
+    mnist|femnist|cifar10|cifar100|tinyimagenet|svhn|emnist)
+        # 支持的数据集
+        ;;
+    *)
+        echo "错误: 不支持的数据集 '$DATASET'"
+        echo "支持的数据集: mnist, femnist, cifar10, cifar100, tinyimagenet, svhn, emnist"
+        exit 1
+        ;;
+esac
 
 echo "选择的数据集: $DATASET"
 echo "选择的算法: $ALGORITHMS"
@@ -58,7 +64,7 @@ RATIO_CLIENT=0.5  # 每轮参与训练的客户端比例
 LEARNING_RATE=0.01  # 学习率
 OPTIMIZER="adam"    # 优化器: adam, sgd
 SEED=2026             # 随机种子，保证实验可重复性
-PARTITION="dirichlet"   # 数据分区方式: iid, noiid, dirichlet
+PARTITION="iid"   # 数据分区方式: iid, noiid, dirichlet
 NUM_CLIENTS=20      # 客户端数量
 DIR_BETA=0.2       # Dirichlet分布参数，仅在PARTITION="dirichlet"时使用
 DATA_FRACTION=1.0    # 数据集采样比例
@@ -91,9 +97,13 @@ echo ""
 # 检查CUDA
 python check_cuda.py
 
-# 运行指定的算法
-IFS=',' read -ra ALGORITHM_LIST <<< "$ALGORITHMS"
-for strategy in "${ALGORITHM_LIST[@]}"; do
+# 运行指定的算法（兼容 POSIX sh：不使用 bash 数组和 here-string）
+OLD_IFS="$IFS"
+IFS=','
+set -- $ALGORITHMS
+IFS="$OLD_IFS"
+
+for strategy in "$@"; do
     echo ""
     echo "========================================"
     echo "  运行${strategy}算法"

@@ -13,6 +13,7 @@ import torch
 import os
 import pickle
 import ray
+import logging
 from fl.data import datasets
 
 # 导入必要的库和模块
@@ -63,7 +64,11 @@ def train_federated_model(args):
             torch.cuda.manual_seed_all(args.seed)
             
     # Initialize Ray
-    ray.init(ignore_reinit_error=True)
+    ray.init(
+    ignore_reinit_error=True,
+    logging_level=logging.ERROR,  # 只打印 ERROR 级别
+    log_to_driver=False           # 不往驱动进程（你的终端）打日志
+    )
     
     # 根据指定的数据集加载数据
     num_classes = -1

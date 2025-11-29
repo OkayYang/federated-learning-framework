@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /bin/sh
 
 # 检查是否提供了数据集名称参数
 if [ $# -eq 1 ]; then

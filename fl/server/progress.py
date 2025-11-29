@@ -65,7 +65,7 @@ class ProgressMonitor:
         while not self.stop_event.is_set():
             try:
                 state = ray.get(self.progress_actor.get_state.remote())
-                for task_id, task_data in state.items():
+                for task_id, task_data in list(state.items()):
                     if task_id not in self.rich_tasks:
                         self.rich_tasks[task_id] = self.progress.add_task(
                             task_data["description"], 
@@ -74,11 +74,17 @@ class ProgressMonitor:
                         )
                     
                     metrics_str = " ".join([f"{k}:{v}" for k, v in task_data["metrics"].items()])
+                    rich_task_id = self.rich_tasks[task_id]
                     self.progress.update(
-                        self.rich_tasks[task_id], 
+                        rich_task_id, 
                         completed=task_data["completed"],
                         metrics=metrics_str
                     )
+
+                    # 如果任务已完成，从界面和缓存中移除，避免进度条堆积
+                    if task_data["total"] > 0 and task_data["completed"] >= task_data["total"]:
+                        self.progress.remove_task(rich_task_id)
+                        del self.rich_tasks[task_id]
             except Exception:
                 pass
             time.sleep(0.1)
