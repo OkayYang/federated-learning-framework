@@ -146,7 +146,7 @@ def train_federated_model(args):
     )
     
     # 打印调度器信息
-    print(f"🎛️ 学习率调度器配置: {args.scheduler}")
+    print(f"学习率调度器配置: {args.scheduler}")
     if args.scheduler == 'step':
         print(f"   - 每{args.step_size}轮衰减{args.gamma}倍")
     elif args.scheduler == 'exp':
